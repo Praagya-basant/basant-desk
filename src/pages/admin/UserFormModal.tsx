@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { X } from 'lucide-react'
-import { supabase, supabaseAdminAuth } from '../../lib/supabase'
+import { supabase } from '../../lib/supabase'
+import { createUser } from '../../lib/admin/createUser'
 import { DEPARTMENTS } from '../../config/departments'
 import type { Role, UserProfile } from '../../types'
 
@@ -26,7 +27,7 @@ export default function UserFormModal({
   const [departments, setDepartments] = useState<string[]>(user?.departments ?? [])
   const [hall, setHall] = useState(user?.hall ?? '')
   const [buyers, setBuyers] = useState(user?.buyers?.join(', ') ?? '')
-  const [tempPassword, setTempPassword] = useState(() => (isNew ? generatePassword() : ''))
+  const [password, setPassword] = useState(() => (isNew ? generatePassword() : ''))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [createdNotice, setCreatedNotice] = useState<string | null>(null)
@@ -50,27 +51,14 @@ export default function UserFormModal({
     }
 
     if (isNew) {
-      const { data, error: signUpError } = await supabaseAdminAuth.auth.signUp({
-        email,
-        password: tempPassword,
-      })
-
-      if (signUpError || !data.user) {
-        setError(signUpError?.message ?? 'Could not create the account.')
+      try {
+        await createUser({ ...payload, password })
         setSaving(false)
-        return
-      }
-
-      const { error: insertError } = await supabase.from('users').insert({ id: data.user.id, ...payload })
-
-      if (insertError) {
-        setError(insertError.message)
+        setCreatedNotice(`Account created. Share this password with them so they can sign in: ${password}`)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not create the account.')
         setSaving(false)
-        return
       }
-
-      setSaving(false)
-      setCreatedNotice(`Account created. Share this temporary password with them: ${tempPassword}`)
       return
     }
 
@@ -130,22 +118,24 @@ export default function UserFormModal({
 
             {isNew && (
               <div>
-                <label className="block text-sm text-text-secondary mb-1.5">Temporary password</label>
+                <label className="block text-sm text-text-secondary mb-1.5">Password</label>
                 <div className="flex gap-2">
                   <input
-                    readOnly
-                    value={tempPassword}
-                    className="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text font-mono outline-none"
+                    required
+                    minLength={8}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="flex-1 rounded-md border border-border bg-bg px-3 py-2 text-sm text-text font-mono outline-none focus:border-text-secondary transition-colors"
                   />
                   <button
                     type="button"
-                    onClick={() => setTempPassword(generatePassword())}
+                    onClick={() => setPassword(generatePassword())}
                     className="rounded-md border border-border text-text text-sm px-3 hover:bg-surface transition-colors"
                   >
-                    Regenerate
+                    Generate
                   </button>
                 </div>
-                <p className="text-xs text-text-secondary mt-1.5">Share this with the user so they can sign in and change it.</p>
+                <p className="text-xs text-text-secondary mt-1.5">At least 8 characters. Share this with the user so they can sign in.</p>
               </div>
             )}
 
