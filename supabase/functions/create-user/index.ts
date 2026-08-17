@@ -59,11 +59,11 @@ Deno.serve(async (req: Request) => {
   const { data: callerProfile, error: profileError } = await adminClient
     .schema('core')
     .from('users')
-    .select('role')
+    .select('role, is_active')
     .eq('id', caller.id)
     .single()
 
-  if (profileError || callerProfile?.role !== 'admin') {
+  if (profileError || callerProfile?.role !== 'admin' || !callerProfile.is_active) {
     return json({ success: false, error: 'Only admins can create users' }, 403)
   }
 
@@ -117,6 +117,13 @@ Deno.serve(async (req: Request) => {
     await adminClient.auth.admin.deleteUser(created.user.id)
     return json({ success: false, error: insertError.message }, 400)
   }
+
+  await adminClient.schema('core').from('activity_log').insert({
+    user_id: caller.id,
+    department: 'admin',
+    action: 'user.created',
+    details: { target_user_id: created.user.id, email, role },
+  })
 
   return json({ success: true, user: { id: created.user.id, email } }, 201)
 })

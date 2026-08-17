@@ -6,35 +6,63 @@ import type { UserProfile } from '../types'
 interface AuthContextValue {
   session: Session | null
   profile: UserProfile | null
+  permissionKeys: Set<string>
   loading: boolean
+  deactivated: boolean
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
+  refreshPermissions: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 async function fetchProfile(userId: string): Promise<UserProfile | null> {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', userId)
-    .single()
+  const { data, error } = await supabase.from('users').select('*').eq('id', userId).single()
 
   if (error) {
     console.error('Failed to load profile:', error.message)
     return null
   }
 
-  console.log('Loaded profile:', data)
-
   return data as UserProfile
+}
+
+async function fetchPermissionKeys(userId: string): Promise<Set<string>> {
+  const { data, error } = await supabase.from('user_permissions').select('permissions(key)').eq('user_id', userId)
+
+  if (error) {
+    console.error('Failed to load permissions:', error.message)
+    return new Set()
+  }
+
+  const rows = data as unknown as { permissions: { key: string } | null }[]
+  return new Set(rows.map((row) => row.permissions?.key).filter((k): k is string => !!k))
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [permissionKeys, setPermissionKeys] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
+  const [deactivated, setDeactivated] = useState(false)
+
+  // Loads profile + permissions for a session, and signs out (without
+  // clearing the "deactivated" notice) if the account has been disabled.
+  async function loadUserState(userId: string) {
+    const loadedProfile = await fetchProfile(userId)
+
+    if (loadedProfile && !loadedProfile.is_active) {
+      setDeactivated(true)
+      setProfile(null)
+      setPermissionKeys(new Set())
+      await supabase.auth.signOut()
+      return
+    }
+
+    setProfile(loadedProfile)
+    setPermissionKeys(loadedProfile ? await fetchPermissionKeys(userId) : new Set())
+  }
 
   useEffect(() => {
     let mounted = true
@@ -43,20 +71,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted) return
       setSession(session)
       if (session?.user) {
-        setProfile(await fetchProfile(session.user.id))
+        await loadUserState(session.user.id)
       }
-      setLoading(false)
+      if (mounted) setLoading(false)
     })
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!mounted) return
       setSession(session)
       if (session?.user) {
-        setProfile(await fetchProfile(session.user.id))
+        await loadUserState(session.user.id)
       } else {
         setProfile(null)
+        setPermissionKeys(new Set())
       }
-      setLoading(false)
+      if (mounted) setLoading(false)
     })
 
     return () => {
@@ -66,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   async function signIn(email: string, password: string) {
+    setDeactivated(false)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
       if (error.message.toLowerCase().includes('invalid login credentials')) {
@@ -82,12 +112,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function refreshProfile() {
     if (session?.user) {
-      setProfile(await fetchProfile(session.user.id))
+      await loadUserState(session.user.id)
+    }
+  }
+
+  async function refreshPermissions() {
+    if (session?.user) {
+      setPermissionKeys(await fetchPermissionKeys(session.user.id))
     }
   }
 
   return (
-    <AuthContext.Provider value={{ session, profile, loading, signIn, signOut, refreshProfile }}>
+    <AuthContext.Provider
+      value={{
+        session,
+        profile,
+        permissionKeys,
+        loading,
+        deactivated,
+        signIn,
+        signOut,
+        refreshProfile,
+        refreshPermissions,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

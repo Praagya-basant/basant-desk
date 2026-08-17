@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
+import { isAdmin } from '../../lib/access'
 import {
   buildPriceGridRecord,
   fetchExtraction,
@@ -173,7 +174,7 @@ function EditableRow({
 export default function HCExtractionDetail() {
   const { id } = useParams<{ id: string }>()
   const { profile } = useAuth()
-  const isAdmin = profile?.role === 'admin'
+  const admin = isAdmin(profile)
 
   const [extraction, setExtraction] = useState<HCExtraction | null>(null)
   const [rows, setRows] = useState<HCExtractionRow[]>([])
@@ -243,12 +244,12 @@ export default function HCExtractionDetail() {
               <th className="font-medium px-4 py-2.5 text-center">Cell</th>
               <th className="font-medium px-4 py-2.5 text-center">Sheet Qty</th>
               <th className="font-medium px-4 py-2.5 text-right">Rate</th>
-              {isAdmin && <th className="font-medium px-4 py-2.5"></th>}
+              {admin && <th className="font-medium px-4 py-2.5"></th>}
             </tr>
           </thead>
           <tbody>
             {rows.map((row) =>
-              isAdmin ? (
+              admin ? (
                 <EditableRow key={row.id} row={row} grid={grid} editedBy={profile!.id} onSaved={load} />
               ) : (
                 <tr key={row.id} className={`border-b border-border last:border-0 ${row.flagged ? 'border-l-2 border-l-amber-400' : ''}`}>

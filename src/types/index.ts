@@ -8,5 +8,13 @@ export interface UserProfile {
   departments: string[]
   hall: string | null
   buyers: string[] | null
+  is_active: boolean
   created_at: string
+}
+
+export interface Permission {
+  id: string
+  key: string
+  label: string
+  department: string
 }

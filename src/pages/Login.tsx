@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Login() {
-  const { session, signIn } = useAuth()
+  const { session, signIn, deactivated } = useAuth()
   const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -32,6 +32,9 @@ export default function Login() {
         </div>
 
         <div className="border border-border rounded-lg bg-surface p-8">
+          {deactivated && (
+            <p className="text-sm text-red-600 mb-4">Your account has been deactivated. Contact an admin.</p>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="email" className="block text-sm text-text-secondary mb-1.5">

@@ -4,8 +4,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { accessibleDepartments } from '../lib/access'
 
 export default function Sidebar() {
-  const { profile, signOut } = useAuth()
-  const departments = accessibleDepartments(profile)
+  const { profile, permissionKeys, signOut } = useAuth()
+  const departments = accessibleDepartments(profile, permissionKeys)
 
   return (
     <aside className="w-60 shrink-0 h-screen sticky top-0 border-r border-border bg-surface flex flex-col">

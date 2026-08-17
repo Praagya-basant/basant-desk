@@ -7,7 +7,7 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Welcome from './pages/Welcome'
 import DepartmentPlaceholder from './pages/DepartmentPlaceholder'
-import AdminUsers from './pages/admin/Users'
+import AdminModule from './pages/admin/AdminModule'
 import PurchaseModule from './pages/purchase/PurchaseModule'
 import { DEPARTMENTS } from './config/departments'
 
@@ -31,10 +31,10 @@ function App() {
               dept.key === 'admin' ? (
                 <Route
                   key={dept.key}
-                  path={dept.route}
+                  path={`${dept.route}/*`}
                   element={
                     <RequireAdmin>
-                      <AdminUsers />
+                      <AdminModule />
                     </RequireAdmin>
                   }
                 />

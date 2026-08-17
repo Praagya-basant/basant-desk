@@ -2,6 +2,8 @@ import { useState, type FormEvent } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { createUser } from '../../lib/admin/createUser'
+import { logActivity } from '../../lib/activityLog'
+import { useAuth } from '../../contexts/AuthContext'
 import { DEPARTMENTS } from '../../config/departments'
 import type { Role, UserProfile } from '../../types'
 
@@ -19,6 +21,7 @@ export default function UserFormModal({
   onClose: () => void
   onSaved: () => void
 }) {
+  const { profile: currentProfile } = useAuth()
   const isNew = user === null
 
   const [fullName, setFullName] = useState(user?.full_name ?? '')
@@ -68,6 +71,14 @@ export default function UserFormModal({
     if (updateError) {
       setError(updateError.message)
       return
+    }
+
+    if (currentProfile) {
+      await logActivity(currentProfile.id, 'admin', 'user.updated', {
+        target_user_id: user!.id,
+        role,
+        departments,
+      })
     }
 
     onSaved()
@@ -176,25 +187,33 @@ export default function UserFormModal({
               </div>
             )}
 
-            <div>
-              <label className="block text-sm text-text-secondary mb-2">Departments</label>
-              <div className="space-y-1.5">
-                {DEPARTMENTS.map((d) => (
-                  <label key={d.key} className="flex items-center gap-2 text-sm text-text">
-                    <input
-                      type="checkbox"
-                      checked={departments.includes(d.key)}
-                      onChange={() => toggleDept(d.key)}
-                      className="rounded border-border"
-                    />
-                    {d.label}
-                  </label>
-                ))}
+            {role === 'admin' || role === 'manager' ? (
+              <div>
+                <label className="block text-sm text-text-secondary mb-2">Departments</label>
+                <div className="space-y-1.5">
+                  {DEPARTMENTS.map((d) => (
+                    <label key={d.key} className="flex items-center gap-2 text-sm text-text">
+                      <input
+                        type="checkbox"
+                        checked={departments.includes(d.key)}
+                        onChange={() => toggleDept(d.key)}
+                        className="rounded border-border"
+                      />
+                      {d.label}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-text-secondary mt-1.5">
+                  {role === 'admin'
+                    ? 'Admins see every department regardless of this list.'
+                    : 'Managers get full access to everything in each department checked here.'}
+                </p>
               </div>
-              {role === 'admin' && (
-                <p className="text-xs text-text-secondary mt-1.5">Admins see every department regardless of this list.</p>
-              )}
-            </div>
+            ) : (
+              <p className="text-xs text-text-secondary">
+                Feature access for Custom and Merchant users is granted from Manage Access, not here.
+              </p>
+            )}
 
             {error && <p className="text-sm text-red-600">{error}</p>}
 
