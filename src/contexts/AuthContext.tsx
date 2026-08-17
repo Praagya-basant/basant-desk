@@ -26,6 +26,8 @@ async function fetchProfile(userId: string): Promise<UserProfile | null> {
     return null
   }
 
+  console.log('Loaded profile:', data)
+
   return data as UserProfile
 }
 

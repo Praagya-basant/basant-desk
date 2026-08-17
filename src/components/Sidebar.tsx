@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LogOut, ShieldCheck } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { accessibleDepartments } from '../lib/access'
 
@@ -30,25 +30,6 @@ export default function Sidebar() {
             {dept.label}
           </NavLink>
         ))}
-
-        {profile?.role === 'admin' && (
-          <>
-            <div className="h-px bg-border my-2 mx-3" />
-            <NavLink
-              to="/admin/users"
-              className={({ isActive }) =>
-                `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
-                  isActive
-                    ? 'bg-bg text-text border border-border'
-                    : 'text-text-secondary hover:text-text'
-                }`
-              }
-            >
-              <ShieldCheck size={16} strokeWidth={1.75} />
-              Users
-            </NavLink>
-          </>
-        )}
       </nav>
 
       <div className="px-3 py-4 border-t border-border">

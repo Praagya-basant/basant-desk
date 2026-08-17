@@ -5,7 +5,7 @@ import { getDepartment } from '../config/departments'
 export default function Layout() {
   const location = useLocation()
   const dept = getDepartment(location.pathname.replace(/^\//, '').split('/')[0])
-  const title = location.pathname === '/admin/users' ? 'Users' : dept?.label
+  const title = dept?.label
 
   return (
     <div className="flex min-h-screen bg-bg">

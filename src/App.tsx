@@ -26,26 +26,29 @@ function App() {
           >
             <Route path="/" element={<Welcome />} />
 
-            {DEPARTMENTS.map((dept) => (
-              <Route
-                key={dept.key}
-                path={dept.route}
-                element={
-                  <RequireDepartment deptKey={dept.key}>
-                    <DepartmentPlaceholder department={dept} />
-                  </RequireDepartment>
-                }
-              />
-            ))}
-
-            <Route
-              path="/admin/users"
-              element={
-                <RequireAdmin>
-                  <AdminUsers />
-                </RequireAdmin>
-              }
-            />
+            {DEPARTMENTS.map((dept) =>
+              dept.key === 'admin' ? (
+                <Route
+                  key={dept.key}
+                  path={dept.route}
+                  element={
+                    <RequireAdmin>
+                      <AdminUsers />
+                    </RequireAdmin>
+                  }
+                />
+              ) : (
+                <Route
+                  key={dept.key}
+                  path={dept.route}
+                  element={
+                    <RequireDepartment deptKey={dept.key}>
+                      <DepartmentPlaceholder department={dept} />
+                    </RequireDepartment>
+                  }
+                />
+              ),
+            )}
           </Route>
         </Routes>
       </AuthProvider>
