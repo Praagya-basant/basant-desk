@@ -1,5 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Loader2 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   extractHCRows,
@@ -14,6 +15,7 @@ import { parseExcelDescriptions } from '../../lib/purchase/parseExcel'
 import type { PreviewField } from '../../components/purchase/ExtractionPreviewTable'
 import ExtractionPreviewTable from '../../components/purchase/ExtractionPreviewTable'
 import SummaryStrip from '../../components/purchase/SummaryStrip'
+import Toast from '../../components/Toast'
 
 type Mode = 'paste' | 'upload'
 
@@ -33,6 +35,7 @@ export default function HCExtraction() {
   const [result, setResult] = useState<ExtractionResult | null>(null)
   const [extracting, setExtracting] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [savedToast, setSavedToast] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -60,15 +63,19 @@ export default function HCExtraction() {
     setExtracting(true)
     setError(null)
 
-    const lines = mode === 'paste' ? getDescriptionsFromPastedText(pasteText) : (fileLines ?? [])
-    if (lines.length === 0) {
-      setError(mode === 'paste' ? 'Paste some description rows first.' : 'Upload a file first.')
-      setExtracting(false)
-      return
-    }
+    // Yield to the browser so the "Extracting…" state actually paints before
+    // the (potentially heavy, synchronous) parsing work runs on large files.
+    setTimeout(() => {
+      const lines = mode === 'paste' ? getDescriptionsFromPastedText(pasteText) : (fileLines ?? [])
+      if (lines.length === 0) {
+        setError(mode === 'paste' ? 'Paste some description rows first.' : 'Upload a file first.')
+        setExtracting(false)
+        return
+      }
 
-    setResult(extractHCRows(lines, grid))
-    setExtracting(false)
+      setResult(extractHCRows(lines, grid))
+      setExtracting(false)
+    }, 0)
   }
 
   function handleFieldChange(index: number, field: PreviewField, value: string) {
@@ -116,10 +123,12 @@ export default function HCExtraction() {
         sourceType: mode === 'paste' ? 'paste' : 'excel',
         rows: result.rows,
       })
-      navigate(`/purchase/hc-extraction/history/${id}`)
+      setSaving(false)
+      setSavedToast(true)
+      // brief pause so the confirmation is actually seen before we navigate away
+      setTimeout(() => navigate(`/purchase/hc-extraction/history/${id}`), 900)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save this extraction.')
-    } finally {
       setSaving(false)
     }
   }
@@ -166,7 +175,7 @@ export default function HCExtraction() {
             type="file"
             accept=".xlsx,.xls"
             onChange={handleFileChange}
-            className="text-sm text-text-secondary"
+            className="text-sm text-text-secondary file:mr-3 file:cursor-pointer file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-2 file:text-sm file:font-medium file:text-text file:transition-colors hover:file:bg-bg"
           />
           {fileName && (
             <p className="text-sm text-text-secondary mt-2">
@@ -179,9 +188,10 @@ export default function HCExtraction() {
       <button
         onClick={handleExtract}
         disabled={extracting || !grid}
-        className="rounded-md bg-text text-bg text-sm font-medium px-4 py-2 hover:opacity-90 transition-opacity disabled:opacity-50 mb-6"
+        className="flex items-center gap-2 rounded-md bg-text text-bg text-sm font-medium px-4 py-2 hover:opacity-90 transition-opacity disabled:opacity-50 mb-6"
       >
-        Extract
+        {extracting && <Loader2 size={14} className="animate-spin" />}
+        {extracting ? 'Extracting…' : 'Extract'}
       </button>
 
       {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
@@ -202,8 +212,9 @@ export default function HCExtraction() {
           <button
             onClick={handleSave}
             disabled={!canSave || saving}
-            className="mt-4 rounded-md bg-text text-bg text-sm font-medium px-4 py-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="flex items-center gap-2 mt-4 rounded-md bg-text text-bg text-sm font-medium px-4 py-2 hover:opacity-90 transition-opacity disabled:opacity-50"
           >
+            {saving && <Loader2 size={14} className="animate-spin" />}
             {saving ? 'Saving…' : 'Save extraction'}
           </button>
 
@@ -240,6 +251,8 @@ export default function HCExtraction() {
           )}
         </div>
       )}
+
+      {savedToast && <Toast message="Extraction saved" onDismiss={() => setSavedToast(false)} />}
     </div>
   )
 }
