@@ -1,9 +1,9 @@
-import type { RatedRow } from '../../lib/purchase/types'
+import { getFlagReason, type HCRow } from '../../lib/purchase/extractHCRows'
 
 export type PreviewField = 'code' | 'l' | 'w' | 'thicknessMm' | 'cell' | 'sheetQty'
 
 interface Props {
-  rows: RatedRow[]
+  rows: HCRow[]
   editable: boolean
   onFieldChange?: (index: number, field: PreviewField, value: string) => void
 }
@@ -19,7 +19,7 @@ function EditableCell({
 }) {
   return (
     <input
-      value={value ?? ''}
+      value={value == null || Number.isNaN(value) ? '' : value}
       onChange={(e) => onChange(e.target.value)}
       className={`w-full bg-transparent outline-none border-b border-transparent focus:border-border ${
         align === 'center' ? 'text-center' : 'text-left'
@@ -51,11 +51,13 @@ export default function ExtractionPreviewTable({ rows, editable, onFieldChange }
               </td>
             </tr>
           ) : (
-            rows.map((row, i) => (
+            rows.map((row, i) => {
+              const flagReason = getFlagReason(row)
+              return (
               <tr
                 key={i}
                 className={`border-b border-border last:border-0 ${
-                  row.flagged ? 'border-l-2 border-l-amber-400' : ''
+                  flagReason ? 'border-l-2 border-l-amber-400' : ''
                 }`}
               >
                 <td className="px-4 py-2.5 text-text align-top">
@@ -68,7 +70,7 @@ export default function ExtractionPreviewTable({ rows, editable, onFieldChange }
                   ) : (
                     row.code || '—'
                   )}
-                  {row.flagged && <p className="text-xs text-text-secondary mt-1">{row.flagReason}</p>}
+                  {flagReason && <p className="text-xs text-text-secondary mt-1">{flagReason}</p>}
                 </td>
                 <td className="px-4 py-2.5 text-center text-text align-top">
                   {editable ? (
@@ -109,7 +111,8 @@ export default function ExtractionPreviewTable({ rows, editable, onFieldChange }
                   {row.rate != null ? row.rate.toFixed(2) : '—'}
                 </td>
               </tr>
-            ))
+              )
+            })
           )}
         </tbody>
       </table>

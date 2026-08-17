@@ -1,11 +1,16 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { extractHCRows } from '../../lib/purchase/extractHCRows'
-import { rateRows, rateRow, buildPriceGridLookup } from '../../lib/purchase/calculateRate'
-import { fetchPriceGrid, saveExtraction } from '../../lib/purchase/db'
+import {
+  extractHCRows,
+  lookupRate,
+  getFlagReason,
+  getDescriptionsFromPastedText,
+  type ExtractionResult,
+  type PriceGrid,
+} from '../../lib/purchase/extractHCRows'
+import { fetchPriceGrid, saveExtraction, buildPriceGridRecord } from '../../lib/purchase/db'
 import { parseExcelDescriptions } from '../../lib/purchase/parseExcel'
-import type { PriceGridEntry, RatedRow } from '../../lib/purchase/types'
 import type { PreviewField } from '../../components/purchase/ExtractionPreviewTable'
 import ExtractionPreviewTable from '../../components/purchase/ExtractionPreviewTable'
 import SummaryStrip from '../../components/purchase/SummaryStrip'
@@ -22,17 +27,17 @@ export default function HCExtraction() {
   const [fileName, setFileName] = useState<string | null>(null)
   const [fileLines, setFileLines] = useState<string[] | null>(null)
 
-  const [grid, setGrid] = useState<PriceGridEntry[] | null>(null)
+  const [grid, setGrid] = useState<PriceGrid | null>(null)
   const [gridError, setGridError] = useState<string | null>(null)
 
-  const [rows, setRows] = useState<RatedRow[] | null>(null)
+  const [result, setResult] = useState<ExtractionResult | null>(null)
   const [extracting, setExtracting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchPriceGrid()
-      .then((gridRows) => setGrid(gridRows.map((g) => ({ thicknessMm: g.thickness_mm, cell: g.cell, pricePerM2: g.price_per_m2 }))))
+      .then((gridRows) => setGrid(buildPriceGridRecord(gridRows)))
       .catch((e) => setGridError(e.message))
   }, [])
 
@@ -55,54 +60,61 @@ export default function HCExtraction() {
     setExtracting(true)
     setError(null)
 
-    const lines = mode === 'paste' ? pasteText.split('\n') : (fileLines ?? [])
-    if (lines.filter((l) => l.trim()).length === 0) {
+    const lines = mode === 'paste' ? getDescriptionsFromPastedText(pasteText) : (fileLines ?? [])
+    if (lines.length === 0) {
       setError(mode === 'paste' ? 'Paste some description rows first.' : 'Upload a file first.')
       setExtracting(false)
       return
     }
 
-    const extracted = extractHCRows(lines)
-    setRows(rateRows(extracted, grid))
+    setResult(extractHCRows(lines, grid))
     setExtracting(false)
   }
 
   function handleFieldChange(index: number, field: PreviewField, value: string) {
-    if (!rows || !grid) return
-    const next = [...rows]
-    const row = { ...next[index] }
+    if (!result || !grid) return
+    const rows = [...result.rows]
+    const row = { ...rows[index] }
 
     switch (field) {
       case 'code':
         row.code = value
         break
+      case 'l':
+      case 'w':
+        row[field] = value === '' ? NaN : Number(value)
+        break
       case 'sheetQty':
         row.sheetQty = value === '' ? 1 : Number(value)
         break
-      case 'l':
-      case 'w':
       case 'thicknessMm':
       case 'cell':
         row[field] = value === '' ? null : Number(value)
         break
     }
 
-    next[index] = rateRow(row, buildPriceGridLookup(grid))
-    setRows(next)
+    row.rate =
+      row.thicknessMm !== null && row.cell !== null && !Number.isNaN(row.l) && !Number.isNaN(row.w)
+        ? lookupRate(row.l, row.w, row.thicknessMm, row.cell, row.sheetQty, grid)
+        : null
+
+    rows[index] = row
+    const totalRate = rows.reduce((sum, r) => sum + (r.rate ?? 0), 0)
+    setResult({ ...result, rows, totalRate: Math.round(totalRate * 100) / 100 })
   }
 
-  const flaggedCount = rows?.filter((r) => r.flagged).length ?? 0
-  const canSave = rows != null && rows.length > 0 && (isAdmin || flaggedCount === 0)
+  const flaggedCount = result?.rows.filter((r) => getFlagReason(r) !== null).length ?? 0
+  const canSave = result != null && result.rows.length > 0 && (isAdmin || flaggedCount === 0)
 
   async function handleSave() {
-    if (!rows || !profile) return
+    if (!result || !profile) return
     setSaving(true)
     setError(null)
     try {
       const id = await saveExtraction({
         createdBy: profile.id,
         sourceType: mode === 'paste' ? 'paste' : 'excel',
-        rows,
+        rows: result.rows,
       })
       navigate(`/purchase/hc-extraction/history/${id}`)
     } catch (err) {
@@ -174,11 +186,11 @@ export default function HCExtraction() {
 
       {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
 
-      {rows && (
+      {result && (
         <div>
-          <SummaryStrip rowCount={rows.length} totalRate={rows.reduce((s, r) => s + (r.rate ?? 0), 0)} flaggedCount={flaggedCount} />
+          <SummaryStrip rowCount={result.rows.length} totalRate={result.totalRate} flaggedCount={flaggedCount} />
 
-          <ExtractionPreviewTable rows={rows} editable={isAdmin} onFieldChange={handleFieldChange} />
+          <ExtractionPreviewTable rows={result.rows} editable={isAdmin} onFieldChange={handleFieldChange} />
 
           {!isAdmin && flaggedCount > 0 && (
             <p className="text-sm text-text-secondary mt-3">
@@ -194,6 +206,38 @@ export default function HCExtraction() {
           >
             {saving ? 'Saving…' : 'Save extraction'}
           </button>
+
+          {result.unparsed.length > 0 && (
+            <div className="mt-10">
+              <h2 className="text-sm font-medium text-text mb-1">Not included in calculation</h2>
+              <p className="text-sm text-text-secondary mb-3">
+                {result.unparsed.length} description{result.unparsed.length === 1 ? '' : 's'} had no readable size
+                and {result.unparsed.length === 1 ? 'was' : 'were'} skipped entirely.
+              </p>
+              <div className="border border-border rounded-lg overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-surface border-b border-border text-left text-text-secondary">
+                      <th className="font-medium px-4 py-2.5">Code</th>
+                      <th className="font-medium px-4 py-2.5">Description</th>
+                      <th className="font-medium px-4 py-2.5">Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.unparsed.map((u, i) => (
+                      <tr key={i} className="border-b border-border last:border-0 border-l-2 border-l-amber-400">
+                        <td className="px-4 py-2.5 text-text">{u.code || '—'}</td>
+                        <td className="px-4 py-2.5 text-text-secondary">{u.description}</td>
+                        <td className="px-4 py-2.5 text-text-secondary">
+                          {u.reason === 'no-dimension-found' ? 'No size found' : 'No code found'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

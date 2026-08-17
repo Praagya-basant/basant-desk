@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import {
+  buildPriceGridRecord,
   fetchExtraction,
   fetchExtractionRows,
   fetchPriceGrid,
@@ -9,9 +10,8 @@ import {
   fetchUserNames,
   updateExtractionRow,
 } from '../../lib/purchase/db'
-import { rateRow, buildPriceGridLookup } from '../../lib/purchase/calculateRate'
+import { getFlagReason, lookupRate, type PriceGrid } from '../../lib/purchase/extractHCRows'
 import type { HCExtraction, HCExtractionRow, HCExtractionRowHistory } from '../../lib/purchase/dbTypes'
-import type { PriceGridEntry } from '../../lib/purchase/types'
 import SummaryStrip from '../../components/purchase/SummaryStrip'
 
 const FIELD_LABELS: Record<string, string> = {
@@ -33,7 +33,7 @@ function EditableRow({
   onSaved,
 }: {
   row: HCExtractionRow
-  grid: PriceGridEntry[]
+  grid: PriceGrid
   editedBy: string
   onSaved: () => void
 }) {
@@ -52,17 +52,19 @@ function EditableRow({
     setSaving(true)
     setError(null)
     try {
-      const rated = rateRow(
-        {
-          code: draft.code ?? '',
-          l: draft.l,
-          w: draft.w,
-          thicknessMm: draft.thickness_mm,
-          cell: draft.cell,
-          sheetQty: draft.sheet_qty,
-        },
-        buildPriceGridLookup(grid),
-      )
+      const l = draft.l
+      const w = draft.w
+      const rate =
+        l !== null && w !== null && draft.thickness_mm !== null && draft.cell !== null
+          ? lookupRate(l, w, draft.thickness_mm, draft.cell, draft.sheet_qty, grid)
+          : null
+      const flagReason = getFlagReason({
+        l: l ?? NaN,
+        w: w ?? NaN,
+        thicknessMm: draft.thickness_mm,
+        cell: draft.cell,
+        rate,
+      })
 
       await updateExtractionRow(
         row,
@@ -73,9 +75,9 @@ function EditableRow({
           thickness_mm: draft.thickness_mm,
           cell: draft.cell,
           sheet_qty: draft.sheet_qty,
-          rate: rated.rate,
-          flagged: rated.flagged,
-          flag_reason: rated.flagReason,
+          rate,
+          flagged: flagReason !== null,
+          flag_reason: flagReason,
         },
         editedBy,
       )
@@ -177,7 +179,7 @@ export default function HCExtractionDetail() {
   const [rows, setRows] = useState<HCExtractionRow[]>([])
   const [history, setHistory] = useState<HCExtractionRowHistory[]>([])
   const [names, setNames] = useState<Map<string, string>>(new Map())
-  const [grid, setGrid] = useState<PriceGridEntry[]>([])
+  const [grid, setGrid] = useState<PriceGrid>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -194,7 +196,7 @@ export default function HCExtractionDetail() {
       setExtraction(ex)
       setRows(exRows)
       setHistory(exHistory)
-      setGrid(priceGrid.map((g) => ({ thicknessMm: g.thickness_mm, cell: g.cell, pricePerM2: g.price_per_m2 })))
+      setGrid(buildPriceGridRecord(priceGrid))
 
       const userIds = [ex.created_by, ...exHistory.map((h) => h.edited_by)].filter((v): v is string => !!v)
       setNames(await fetchUserNames(userIds))

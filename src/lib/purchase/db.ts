@@ -1,5 +1,5 @@
 import { supabase } from '../supabase'
-import type { RatedRow } from './types'
+import { getFlagReason, type HCRow, type PriceGrid } from './extractHCRows'
 import type { HCExtraction, HCExtractionRow, HCExtractionRowHistory, PriceGridRow } from './dbTypes'
 
 const purchase = () => supabase.schema('purchase')
@@ -8,6 +8,17 @@ export async function fetchPriceGrid(): Promise<PriceGridRow[]> {
   const { data, error } = await purchase().from('hc_price_grid').select('*').order('thickness_mm').order('cell')
   if (error) throw error
   return data as PriceGridRow[]
+}
+
+/** Converts the DB's flat price grid rows into the nested Record shape the
+ * extraction engine expects, so the grid shown in the UI and the grid used
+ * to calculate rates are always the same data. */
+export function buildPriceGridRecord(rows: PriceGridRow[]): PriceGrid {
+  const grid: PriceGrid = {}
+  for (const row of rows) {
+    grid[row.thickness_mm] = { ...grid[row.thickness_mm], [row.cell]: row.price_per_m2 }
+  }
+  return grid
 }
 
 export async function upsertPriceGridEntry(thicknessMm: number, cell: number, pricePerM2: number, updatedBy: string) {
@@ -22,7 +33,7 @@ export async function upsertPriceGridEntry(thicknessMm: number, cell: number, pr
 export async function saveExtraction(params: {
   createdBy: string
   sourceType: 'excel' | 'paste'
-  rows: RatedRow[]
+  rows: HCRow[]
 }): Promise<string> {
   const totalRate = params.rows.reduce((sum, r) => sum + (r.rate ?? 0), 0)
 
@@ -45,18 +56,21 @@ export async function saveExtraction(params: {
   const { error: rowsError } = await purchase()
     .from('hc_extraction_rows')
     .insert(
-      params.rows.map((row) => ({
-        extraction_id: extractionId,
-        code: row.code,
-        l: row.l,
-        w: row.w,
-        thickness_mm: row.thicknessMm,
-        cell: row.cell,
-        sheet_qty: row.sheetQty,
-        rate: row.rate,
-        flagged: row.flagged,
-        flag_reason: row.flagReason,
-      })),
+      params.rows.map((row) => {
+        const flagReason = getFlagReason(row)
+        return {
+          extraction_id: extractionId,
+          code: row.code,
+          l: row.l,
+          w: row.w,
+          thickness_mm: row.thicknessMm,
+          cell: row.cell,
+          sheet_qty: row.sheetQty,
+          rate: row.rate,
+          flagged: flagReason !== null,
+          flag_reason: flagReason,
+        }
+      }),
     )
 
   if (rowsError) throw rowsError
