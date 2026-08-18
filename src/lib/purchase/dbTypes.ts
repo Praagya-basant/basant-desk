@@ -3,6 +3,7 @@ export interface HCExtraction {
   created_by: string | null
   created_at: string
   source_type: 'excel' | 'paste'
+  supplier: string
   row_count: number
   total_rate: number
   status: 'saved' | 'edited'
@@ -20,6 +21,7 @@ export interface HCExtractionRow {
   rate: number | null
   flagged: boolean
   flag_reason: string | null
+  defaulted_cell: boolean
 }
 
 export interface HCExtractionRowHistory {
@@ -33,6 +35,7 @@ export interface HCExtractionRowHistory {
 }
 
 export interface PriceGridRow {
+  supplier: string
   thickness_mm: number
   cell: number
   price_per_m2: number

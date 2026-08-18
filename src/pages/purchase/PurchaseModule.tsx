@@ -1,11 +1,12 @@
 import { Routes, Route } from 'react-router-dom'
-import RequireAdmin from '../../components/RequireAdmin'
+import RequireAdminOrDeptAdmin from '../../components/RequireAdminOrDeptAdmin'
 import RequirePermission from '../../components/RequirePermission'
 import PurchaseHome from './PurchaseHome'
 import HCExtraction from './HCExtraction'
 import HCExtractionHistory from './HCExtractionHistory'
 import HCExtractionDetail from './HCExtractionDetail'
 import PriceGridSettings from './PriceGridSettings'
+import PurchaseUsers from './PurchaseUsers'
 
 export default function PurchaseModule() {
   return (
@@ -38,9 +39,17 @@ export default function PurchaseModule() {
       <Route
         path="settings/price-grid"
         element={
-          <RequireAdmin>
+          <RequireAdminOrDeptAdmin departmentKey="purchase">
             <PriceGridSettings />
-          </RequireAdmin>
+          </RequireAdminOrDeptAdmin>
+        }
+      />
+      <Route
+        path="settings/users"
+        element={
+          <RequireAdminOrDeptAdmin departmentKey="purchase">
+            <PurchaseUsers />
+          </RequireAdminOrDeptAdmin>
         }
       />
     </Routes>

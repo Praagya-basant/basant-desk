@@ -4,15 +4,34 @@ import type { HCExtraction, HCExtractionRow, HCExtractionRowHistory, PriceGridRo
 
 const purchase = () => supabase.schema('purchase')
 
+/** All price grid rows, across every supplier — used where the full picture is needed (e.g. the settings page's thickness rows). */
 export async function fetchPriceGrid(): Promise<PriceGridRow[]> {
-  const { data, error } = await purchase().from('hc_price_grid').select('*').order('thickness_mm').order('cell')
+  const { data, error } = await purchase().from('hc_price_grid').select('*').order('supplier').order('thickness_mm').order('cell')
+  if (error) throw error
+  return data as PriceGridRow[]
+}
+
+export async function fetchSuppliers(): Promise<string[]> {
+  const rows = await fetchPriceGrid()
+  return Array.from(new Set(rows.map((r) => r.supplier))).sort()
+}
+
+export async function fetchPriceGridForSupplier(supplier: string): Promise<PriceGridRow[]> {
+  const { data, error } = await purchase()
+    .from('hc_price_grid')
+    .select('*')
+    .eq('supplier', supplier)
+    .order('thickness_mm')
+    .order('cell')
   if (error) throw error
   return data as PriceGridRow[]
 }
 
 /** Converts the DB's flat price grid rows into the nested Record shape the
  * extraction engine expects, so the grid shown in the UI and the grid used
- * to calculate rates are always the same data. */
+ * to calculate rates are always the same data. Callers must pre-filter rows
+ * to a single supplier — a rate is always calculated against exactly one
+ * supplier's numbers, never a blend. */
 export function buildPriceGridRecord(rows: PriceGridRow[]): PriceGrid {
   const grid: PriceGrid = {}
   for (const row of rows) {
@@ -21,18 +40,33 @@ export function buildPriceGridRecord(rows: PriceGridRow[]): PriceGrid {
   return grid
 }
 
-export async function upsertPriceGridEntry(thicknessMm: number, cell: number, pricePerM2: number, updatedBy: string) {
+export async function upsertPriceGridEntry(
+  supplier: string,
+  thicknessMm: number,
+  cell: number,
+  pricePerM2: number,
+  updatedBy: string,
+) {
   const { error } = await purchase()
     .from('hc_price_grid')
-    .update({ price_per_m2: pricePerM2, updated_by: updatedBy, updated_at: new Date().toISOString() })
-    .eq('thickness_mm', thicknessMm)
-    .eq('cell', cell)
+    .upsert(
+      {
+        supplier,
+        thickness_mm: thicknessMm,
+        cell,
+        price_per_m2: pricePerM2,
+        updated_by: updatedBy,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'supplier,thickness_mm,cell' },
+    )
   if (error) throw error
 }
 
 export async function saveExtraction(params: {
   createdBy: string
   sourceType: 'excel' | 'paste'
+  supplier: string
   rows: HCRow[]
 }): Promise<string> {
   const totalRate = params.rows.reduce((sum, r) => sum + (r.rate ?? 0), 0)
@@ -42,6 +76,7 @@ export async function saveExtraction(params: {
     .insert({
       created_by: params.createdBy,
       source_type: params.sourceType,
+      supplier: params.supplier,
       row_count: params.rows.length,
       total_rate: Math.round(totalRate * 100) / 100,
       status: 'saved',
@@ -69,6 +104,7 @@ export async function saveExtraction(params: {
           rate: row.rate,
           flagged: flagReason !== null,
           flag_reason: flagReason,
+          defaulted_cell: row.defaultedCell,
         }
       }),
     )

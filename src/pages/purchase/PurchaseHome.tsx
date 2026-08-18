@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom'
-import { FileSpreadsheet, History, SlidersHorizontal } from 'lucide-react'
+import { FileSpreadsheet, History, SlidersHorizontal, Users } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
-import { isAdmin } from '../../lib/access'
+import { isAdminOrDeptAdmin } from '../../lib/access'
 import { useHasAccess } from '../../hooks/useHasAccess'
 
 export default function PurchaseHome() {
   const { profile } = useAuth()
-  const admin = isAdmin(profile)
+  const canManage = isAdminOrDeptAdmin(profile, 'purchase')
   const canUseHCExtraction = useHasAccess('purchase.hc_extraction')
 
   return (
@@ -14,7 +14,7 @@ export default function PurchaseHome() {
       <h1 className="text-lg font-medium text-text mb-1">Purchase</h1>
       <p className="text-sm text-text-secondary mb-6">Tools for the Purchase department.</p>
 
-      {!canUseHCExtraction && !admin && (
+      {!canUseHCExtraction && !canManage && (
         <p className="text-sm text-text-secondary mb-6">
           No tools assigned yet. Contact an admin to get access.
         </p>
@@ -43,15 +43,26 @@ export default function PurchaseHome() {
           </>
         )}
 
-        {admin && (
-          <Link
-            to="/purchase/settings/price-grid"
-            className="border border-border rounded-lg p-4 hover:bg-surface transition-colors"
-          >
-            <SlidersHorizontal size={18} strokeWidth={1.75} className="text-text-secondary mb-3" />
-            <p className="text-sm font-medium text-text mb-0.5">Price Grid</p>
-            <p className="text-xs text-text-secondary">Edit the HC sheet price grid used to calculate rates.</p>
-          </Link>
+        {canManage && (
+          <>
+            <Link
+              to="/purchase/settings/price-grid"
+              className="border border-border rounded-lg p-4 hover:bg-surface transition-colors"
+            >
+              <SlidersHorizontal size={18} strokeWidth={1.75} className="text-text-secondary mb-3" />
+              <p className="text-sm font-medium text-text mb-0.5">Price Grid</p>
+              <p className="text-xs text-text-secondary">Edit supplier price grids used to calculate rates.</p>
+            </Link>
+
+            <Link
+              to="/purchase/settings/users"
+              className="border border-border rounded-lg p-4 hover:bg-surface transition-colors"
+            >
+              <Users size={18} strokeWidth={1.75} className="text-text-secondary mb-3" />
+              <p className="text-sm font-medium text-text mb-0.5">Users</p>
+              <p className="text-xs text-text-secondary">Manage users scoped to the Purchase department.</p>
+            </Link>
+          </>
         )}
       </div>
     </div>

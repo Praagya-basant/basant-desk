@@ -8,6 +8,7 @@ export interface CreateUserParams {
   departments: string[]
   hall: string | null
   buyers: string[] | null
+  department_admin_for?: string[]
 }
 
 export async function createUser(params: CreateUserParams): Promise<{ id: string; email: string }> {

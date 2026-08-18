@@ -1,6 +1,10 @@
 // Creates a new BASANT Desk user: an auth.users login + matching core.users
-// profile row, in one server-side step. Only callable by an existing admin —
-// the service role key this function uses is never exposed to the browser.
+// profile row, in one server-side step. Callable by a global admin, or by a
+// department admin creating a user scoped to their own department (same
+// subset constraints as the "department admins can manage users" RLS policy
+// on core.users — this function uses the service role key and bypasses RLS
+// entirely, so it must enforce those constraints itself). Never exposed to
+// the browser.
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -59,11 +63,18 @@ Deno.serve(async (req: Request) => {
   const { data: callerProfile, error: profileError } = await adminClient
     .schema('core')
     .from('users')
-    .select('role, is_active')
+    .select('role, is_active, department_admin_for')
     .eq('id', caller.id)
     .single()
 
-  if (profileError || callerProfile?.role !== 'admin' || !callerProfile.is_active) {
+  if (profileError || !callerProfile?.is_active) {
+    return json({ success: false, error: 'Only admins can create users' }, 403)
+  }
+
+  const callerIsGlobalAdmin = callerProfile.role === 'admin'
+  const callerDeptScope: string[] = callerProfile.department_admin_for ?? []
+
+  if (!callerIsGlobalAdmin && callerDeptScope.length === 0) {
     return json({ success: false, error: 'Only admins can create users' }, 403)
   }
 
@@ -83,6 +94,9 @@ Deno.serve(async (req: Request) => {
   const buyers = Array.isArray(body.buyers)
     ? body.buyers.filter((b) => typeof b === 'string' && b.trim())
     : null
+  const departmentAdminFor = Array.isArray(body.department_admin_for)
+    ? body.department_admin_for.filter((d) => typeof d === 'string')
+    : []
 
   if (!email || !password || !VALID_ROLES.includes(role)) {
     return json({ success: false, error: 'email, password, and a valid role are required' }, 400)
@@ -90,6 +104,16 @@ Deno.serve(async (req: Request) => {
 
   if (password.length < 8) {
     return json({ success: false, error: 'Password must be at least 8 characters' }, 400)
+  }
+
+  // A department admin can only create non-admin users scoped to their own
+  // department(s), and can only grant department_admin_for within that same
+  // scope — mirrors core.users' "department admins can manage users" policy.
+  if (!callerIsGlobalAdmin) {
+    const withinScope = (list: string[]) => list.length > 0 && list.every((d) => callerDeptScope.includes(d))
+    if (role === 'admin' || !withinScope(departments) || !departmentAdminFor.every((d) => callerDeptScope.includes(d))) {
+      return json({ success: false, error: 'You can only create users within your own department scope' }, 403)
+    }
   }
 
   const { data: created, error: createError } = await adminClient.auth.admin.createUser({
@@ -110,6 +134,7 @@ Deno.serve(async (req: Request) => {
     departments,
     hall: role === 'manager' ? hall : null,
     buyers: role === 'merchant' ? buyers : null,
+    department_admin_for: departmentAdminFor,
   })
 
   if (insertError) {
@@ -120,9 +145,9 @@ Deno.serve(async (req: Request) => {
 
   await adminClient.schema('core').from('activity_log').insert({
     user_id: caller.id,
-    department: 'admin',
+    department: departments[0] ?? 'admin',
     action: 'user.created',
-    details: { target_user_id: created.user.id, email, role },
+    details: { target_user_id: created.user.id, email, role, departments, department_admin_for: departmentAdminFor },
   })
 
   return json({ success: true, user: { id: created.user.id, email } }, 201)

@@ -7,6 +7,17 @@ export function isAdmin(profile: UserProfile | null): boolean {
   return profile?.role === 'admin'
 }
 
+// department_admin_for grants full admin-equivalent power, but scoped to
+// just that one department (e.g. a Purchase department admin can manage
+// Purchase users/price grid/data without being a global admin).
+export function isDepartmentAdmin(profile: UserProfile | null, departmentKey: string): boolean {
+  return profile?.department_admin_for?.includes(departmentKey) ?? false
+}
+
+export function isAdminOrDeptAdmin(profile: UserProfile | null, departmentKey: string): boolean {
+  return isAdmin(profile) || isDepartmentAdmin(profile, departmentKey)
+}
+
 // permissionKeys are stored as "department.feature" (e.g. "purchase.hc_extraction").
 function departmentOf(permissionKey: string): string {
   return permissionKey.split('.')[0]
@@ -18,9 +29,10 @@ function grantedDepartments(permissionKeys: Set<string>): Set<string> {
 
 /**
  * The single access rule for the whole app:
- *   admin              -> everything
- *   manager, in dept X -> everything in dept X, no permission lookup needed
- *   everyone else      -> only what's explicitly granted in user_permissions
+ *   admin                          -> everything
+ *   manager, in dept X             -> everything in dept X, no permission lookup needed
+ *   department_admin_for X         -> everything in dept X, no permission lookup needed
+ *   everyone else                  -> only what's explicitly granted in user_permissions
  */
 export function hasAccess(
   profile: UserProfile | null,
@@ -28,9 +40,10 @@ export function hasAccess(
   permissionKey: string,
 ): boolean {
   if (!profile) return false
-  if (isAdmin(profile)) return true
+  const department = departmentOf(permissionKey)
+  if (isAdmin(profile) || isDepartmentAdmin(profile, department)) return true
   if (profile.role === 'manager') {
-    return profile.departments?.includes(departmentOf(permissionKey)) ?? false
+    return profile.departments?.includes(department) ?? false
   }
   return permissionKeys.has(permissionKey)
 }
@@ -41,7 +54,7 @@ export function canAccessDepartment(
   departmentKey: string,
 ): boolean {
   if (!profile) return false
-  if (isAdmin(profile)) return true
+  if (isAdmin(profile) || isDepartmentAdmin(profile, departmentKey)) return true
   if (profile.role === 'manager') {
     return profile.departments?.includes(departmentKey) ?? false
   }
@@ -51,9 +64,11 @@ export function canAccessDepartment(
 export function accessibleDepartments(profile: UserProfile | null, permissionKeys: Set<string>) {
   if (!profile) return []
   if (isAdmin(profile)) return DEPARTMENTS
-  if (profile.role === 'manager') {
-    return DEPARTMENTS.filter((d) => profile.departments?.includes(d.key))
-  }
   const granted = grantedDepartments(permissionKeys)
-  return DEPARTMENTS.filter((d) => granted.has(d.key))
+  return DEPARTMENTS.filter(
+    (d) =>
+      isDepartmentAdmin(profile, d.key) ||
+      (profile.role === 'manager' && (profile.departments?.includes(d.key) ?? false)) ||
+      granted.has(d.key),
+  )
 }

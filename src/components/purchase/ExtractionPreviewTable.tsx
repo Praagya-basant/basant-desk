@@ -53,13 +53,13 @@ export default function ExtractionPreviewTable({ rows, editable, onFieldChange }
           ) : (
             rows.map((row, i) => {
               const flagReason = getFlagReason(row)
+              const borderClass = flagReason
+                ? 'border-l-2 border-l-amber-400'
+                : row.defaultedCell
+                  ? 'border-l-2 border-l-sky-300'
+                  : ''
               return (
-              <tr
-                key={i}
-                className={`border-b border-border last:border-0 ${
-                  flagReason ? 'border-l-2 border-l-amber-400' : ''
-                }`}
-              >
+              <tr key={i} className={`border-b border-border last:border-0 ${borderClass}`}>
                 <td className="px-4 py-2.5 text-text align-top">
                   {editable ? (
                     <EditableCell
@@ -98,6 +98,11 @@ export default function ExtractionPreviewTable({ rows, editable, onFieldChange }
                     <EditableCell value={row.cell} onChange={(v) => onFieldChange?.(i, 'cell', v)} />
                   ) : (
                     (row.cell ?? '—')
+                  )}
+                  {row.defaultedCell && (
+                    <span className="inline-block text-[11px] leading-none text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-1 mt-1.5 whitespace-nowrap">
+                      Cell defaulted to 12
+                    </span>
                   )}
                 </td>
                 <td className="px-4 py-2.5 text-center text-text align-top">

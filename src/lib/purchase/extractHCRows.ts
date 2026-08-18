@@ -53,6 +53,8 @@ export interface HCRow {
   sheetQty: number
   /** null when thickness/cell weren't found on the price grid, or missing */
   rate: number | null
+  /** true when no cell count was found in the description and it was defaulted to 12 — not an error, just an assumption worth surfacing */
+  defaultedCell: boolean
   /** the full original description this row was split from */
   sourceDescription: string
 }
@@ -224,6 +226,15 @@ export function parseDescription(
       if (cell === null && cellBackward) cell = parseInt(cellBackward[1], 10)
     }
 
+    // No cell count anywhere in the description is a normal, expected case —
+    // default to 12 rather than flagging it as unparseable, but keep a
+    // record that it was assumed rather than read.
+    let defaultedCell = false
+    if (cell === null) {
+      cell = 12
+      defaultedCell = true
+    }
+
     const l = parseFloat(dim.l)
     const w = parseFloat(dim.w)
 
@@ -237,6 +248,7 @@ export function parseDescription(
       cell,
       sheetQty,
       rate,
+      defaultedCell,
       sourceDescription: raw,
     })
   }

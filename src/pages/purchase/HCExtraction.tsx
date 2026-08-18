@@ -2,7 +2,7 @@ import { useEffect, useState, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
-import { isAdmin } from '../../lib/access'
+import { isAdminOrDeptAdmin } from '../../lib/access'
 import {
   extractHCRows,
   lookupRate,
@@ -11,7 +11,7 @@ import {
   type ExtractionResult,
   type PriceGrid,
 } from '../../lib/purchase/extractHCRows'
-import { fetchPriceGrid, saveExtraction, buildPriceGridRecord } from '../../lib/purchase/db'
+import { fetchSuppliers, fetchPriceGridForSupplier, saveExtraction, buildPriceGridRecord } from '../../lib/purchase/db'
 import { parseExcelDescriptions } from '../../lib/purchase/parseExcel'
 import { logActivity } from '../../lib/activityLog'
 import type { PreviewField } from '../../components/purchase/ExtractionPreviewTable'
@@ -24,12 +24,16 @@ type Mode = 'paste' | 'upload'
 export default function HCExtraction() {
   const { profile } = useAuth()
   const navigate = useNavigate()
-  const admin = isAdmin(profile)
+  const canEdit = isAdminOrDeptAdmin(profile, 'purchase')
 
   const [mode, setMode] = useState<Mode>('paste')
   const [pasteText, setPasteText] = useState('')
   const [fileName, setFileName] = useState<string | null>(null)
   const [fileLines, setFileLines] = useState<string[] | null>(null)
+
+  const [suppliers, setSuppliers] = useState<string[]>([])
+  const [suppliersError, setSuppliersError] = useState<string | null>(null)
+  const [supplier, setSupplier] = useState('')
 
   const [grid, setGrid] = useState<PriceGrid | null>(null)
   const [gridError, setGridError] = useState<string | null>(null)
@@ -41,10 +45,32 @@ export default function HCExtraction() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchPriceGrid()
-      .then((gridRows) => setGrid(buildPriceGridRecord(gridRows)))
-      .catch((e) => setGridError(e.message))
+    fetchSuppliers()
+      .then(setSuppliers)
+      .catch((e) => setSuppliersError(e.message))
   }, [])
+
+  useEffect(() => {
+    if (!supplier) {
+      setGrid(null)
+      return
+    }
+    let cancelled = false
+    setGridError(null)
+    // Changing supplier invalidates any preview already on screen — its
+    // rates were calculated against the previous supplier's numbers.
+    setResult(null)
+    fetchPriceGridForSupplier(supplier)
+      .then((rows) => {
+        if (!cancelled) setGrid(buildPriceGridRecord(rows))
+      })
+      .catch((e) => {
+        if (!cancelled) setGridError(e.message)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [supplier])
 
   async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -61,7 +87,7 @@ export default function HCExtraction() {
   }
 
   function handleExtract() {
-    if (!grid) return
+    if (!grid || !supplier) return
     setExtracting(true)
     setError(null)
 
@@ -99,6 +125,7 @@ export default function HCExtraction() {
       case 'thicknessMm':
       case 'cell':
         row[field] = value === '' ? null : Number(value)
+        if (field === 'cell') row.defaultedCell = false
         break
     }
 
@@ -113,20 +140,22 @@ export default function HCExtraction() {
   }
 
   const flaggedCount = result?.rows.filter((r) => getFlagReason(r) !== null).length ?? 0
-  const canSave = result != null && result.rows.length > 0 && (admin || flaggedCount === 0)
+  const canSave = result != null && result.rows.length > 0 && (canEdit || flaggedCount === 0)
 
   async function handleSave() {
-    if (!result || !profile) return
+    if (!result || !profile || !supplier) return
     setSaving(true)
     setError(null)
     try {
       const id = await saveExtraction({
         createdBy: profile.id,
         sourceType: mode === 'paste' ? 'paste' : 'excel',
+        supplier,
         rows: result.rows,
       })
       await logActivity(profile.id, 'purchase', 'hc_extraction.saved', {
         extraction_id: id,
+        supplier,
         row_count: result.rows.length,
         total_rate: result.totalRate,
       })
@@ -147,7 +176,23 @@ export default function HCExtraction() {
         Paste or upload honeycomb sheet product logs to extract structured rows.
       </p>
 
-      {gridError && <p className="text-sm text-red-600 mb-4">Could not load the price grid: {gridError}</p>}
+      <div className="mb-6">
+        <label className="block text-sm text-text-secondary mb-1.5">Supplier</label>
+        <select
+          value={supplier}
+          onChange={(e) => setSupplier(e.target.value)}
+          className="w-full max-w-xs rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-text-secondary transition-colors"
+        >
+          <option value="">Select a supplier…</option>
+          {suppliers.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+        {suppliersError && <p className="text-sm text-red-600 mt-1.5">Could not load suppliers: {suppliersError}</p>}
+        {gridError && <p className="text-sm text-red-600 mt-1.5">Could not load the price grid: {gridError}</p>}
+      </div>
 
       <div className="flex gap-1 mb-4 border border-border rounded-md p-1 w-fit bg-surface">
         <button
@@ -192,24 +237,32 @@ export default function HCExtraction() {
         </div>
       )}
 
-      <button
-        onClick={handleExtract}
-        disabled={extracting || !grid}
-        className="flex items-center gap-2 rounded-md bg-text text-bg text-sm font-medium px-4 py-2 hover:opacity-90 transition-opacity disabled:opacity-50 mb-6"
-      >
-        {extracting && <Loader2 size={14} className="animate-spin" />}
-        {extracting ? 'Extracting…' : 'Extract'}
-      </button>
+      <div className="mb-6">
+        <button
+          onClick={handleExtract}
+          disabled={extracting || !supplier || !grid}
+          className="flex items-center gap-2 rounded-md bg-text text-bg text-sm font-medium px-4 py-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+        >
+          {extracting && <Loader2 size={14} className="animate-spin" />}
+          {extracting ? 'Extracting…' : 'Extract'}
+        </button>
+        {!supplier && <p className="text-sm text-text-secondary mt-2">Select a supplier to continue.</p>}
+      </div>
 
       {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
 
       {result && (
         <div>
-          <SummaryStrip rowCount={result.rows.length} totalRate={result.totalRate} flaggedCount={flaggedCount} />
+          <SummaryStrip
+            rowCount={result.rows.length}
+            totalRate={result.totalRate}
+            flaggedCount={flaggedCount}
+            supplier={supplier}
+          />
 
-          <ExtractionPreviewTable rows={result.rows} editable={admin} onFieldChange={handleFieldChange} />
+          <ExtractionPreviewTable rows={result.rows} editable={canEdit} onFieldChange={handleFieldChange} />
 
-          {!admin && flaggedCount > 0 && (
+          {!canEdit && flaggedCount > 0 && (
             <p className="text-sm text-text-secondary mt-3">
               {flaggedCount} row{flaggedCount === 1 ? '' : 's'} need admin correction before this can be saved — ask
               an admin to fix and save, or re-run extraction with corrected input.

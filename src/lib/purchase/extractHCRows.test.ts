@@ -92,6 +92,17 @@ describe('extractHCRows', () => {
     expect(result.totalRate).toBeCloseTo(result.rows[0].rate!, 2)
   })
 
+  it('defaults cell to 12 and flags it as defaulted when no cell count is found', () => {
+    const { rows } = extractHCRows(['BT0136J 24X18 30MM'])
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ code: 'BT0136J', l: 24, w: 18, thicknessMm: 30, cell: 12, defaultedCell: true })
+  })
+
+  it('does not mark cell as defaulted when a cell count was actually read', () => {
+    const { rows } = extractHCRows(['BT0136J 24X18 30MM 8CELL'])
+    expect(rows[0]).toMatchObject({ cell: 8, defaultedCell: false })
+  })
+
   it('uses the passed-in price grid instead of the default constant', () => {
     const customGrid = { 30: { 6: 1000 } }
     const { rows } = extractHCRows(['BT0136J 24X18 30MM 6CELL'], customGrid)

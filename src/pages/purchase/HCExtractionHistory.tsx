@@ -17,6 +17,7 @@ function toHCRow(row: HCExtractionRow): HCRow {
     cell: row.cell,
     sheetQty: row.sheet_qty,
     rate: row.rate,
+    defaultedCell: row.defaulted_cell,
     sourceDescription: '',
   }
 }
@@ -65,7 +66,7 @@ function DetailedLog({ extractions, names }: { extractions: HCExtraction[]; name
         {extractions.map((ex) => (
           <option key={ex.id} value={ex.id}>
             {new Date(ex.created_at).toLocaleString()} · {ex.created_by ? names.get(ex.created_by) ?? 'Unknown' : 'Unknown'} ·{' '}
-            {ex.source_type}
+            {ex.source_type} · {ex.supplier}
           </option>
         ))}
       </select>
@@ -80,6 +81,7 @@ function DetailedLog({ extractions, names }: { extractions: HCExtraction[]; name
             rowCount={rows.length}
             totalRate={selected.total_rate}
             flaggedCount={rows.filter((r) => r.flagged).length}
+            supplier={selected.supplier}
           />
           <ExtractionPreviewTable rows={rows.map(toHCRow)} editable={false} />
         </div>
@@ -141,6 +143,7 @@ export default function HCExtractionHistory() {
                 <th className="font-medium px-4 py-2.5">Date</th>
                 <th className="font-medium px-4 py-2.5">Created by</th>
                 <th className="font-medium px-4 py-2.5">Source</th>
+                <th className="font-medium px-4 py-2.5">Supplier</th>
                 <th className="font-medium px-4 py-2.5 text-center">Rows</th>
                 <th className="font-medium px-4 py-2.5 text-right">Total rate</th>
                 <th className="font-medium px-4 py-2.5">Status</th>
@@ -149,7 +152,7 @@ export default function HCExtractionHistory() {
             <tbody>
               {extractions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-text-secondary">
+                  <td colSpan={7} className="px-4 py-6 text-center text-text-secondary">
                     No extractions yet.
                   </td>
                 </tr>
@@ -165,6 +168,7 @@ export default function HCExtractionHistory() {
                       {ex.created_by ? names.get(ex.created_by) ?? '—' : '—'}
                     </td>
                     <td className="px-4 py-2.5 text-text-secondary capitalize">{ex.source_type}</td>
+                    <td className="px-4 py-2.5 text-text-secondary">{ex.supplier}</td>
                     <td className="px-4 py-2.5 text-center text-text">{ex.row_count}</td>
                     <td className="px-4 py-2.5 text-right text-text tabular-nums">{ex.total_rate.toFixed(2)}</td>
                     <td className="px-4 py-2.5 text-text-secondary capitalize">{ex.status}</td>

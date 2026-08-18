@@ -4,7 +4,6 @@ import { supabase } from '../../lib/supabase'
 import { createUser } from '../../lib/admin/createUser'
 import { logActivity } from '../../lib/activityLog'
 import { useAuth } from '../../contexts/AuthContext'
-import { DEPARTMENTS } from '../../config/departments'
 import type { Role, UserProfile } from '../../types'
 
 function generatePassword() {
@@ -12,7 +11,7 @@ function generatePassword() {
   return Array.from({ length: 14 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
 }
 
-export default function UserFormModal({
+export default function PurchaseUserFormModal({
   user,
   onClose,
   onSaved,
@@ -26,23 +25,14 @@ export default function UserFormModal({
 
   const [fullName, setFullName] = useState(user?.full_name ?? '')
   const [email, setEmail] = useState(user?.email ?? '')
-  const [role, setRole] = useState<Role>(user?.role ?? 'custom')
-  const [departments, setDepartments] = useState<string[]>(user?.departments ?? [])
-  const [departmentAdminFor, setDepartmentAdminFor] = useState<string[]>(user?.department_admin_for ?? [])
-  const [hall, setHall] = useState(user?.hall ?? '')
-  const [buyers, setBuyers] = useState(user?.buyers?.join(', ') ?? '')
+  const [role, setRole] = useState<Exclude<Role, 'admin'>>(
+    user?.role === 'admin' ? 'custom' : (user?.role ?? 'custom'),
+  )
+  const [isDeptAdmin, setIsDeptAdmin] = useState(user?.department_admin_for?.includes('purchase') ?? false)
   const [password, setPassword] = useState(() => (isNew ? generatePassword() : ''))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [createdNotice, setCreatedNotice] = useState<string | null>(null)
-
-  function toggleDept(key: string) {
-    setDepartments((prev) => (prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]))
-  }
-
-  function toggleDeptAdmin(key: string) {
-    setDepartmentAdminFor((prev) => (prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]))
-  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -53,10 +43,10 @@ export default function UserFormModal({
       full_name: fullName || null,
       email,
       role,
-      departments,
-      hall: role === 'manager' ? hall || null : null,
-      buyers: role === 'merchant' ? (buyers.split(',').map((b) => b.trim()).filter(Boolean)) : null,
-      department_admin_for: role === 'admin' ? [] : departmentAdminFor,
+      departments: ['purchase'],
+      hall: null,
+      buyers: null,
+      department_admin_for: isDeptAdmin ? ['purchase'] : [],
     }
 
     if (isNew) {
@@ -80,10 +70,9 @@ export default function UserFormModal({
     }
 
     if (currentProfile) {
-      await logActivity(currentProfile.id, 'admin', 'user.updated', {
+      await logActivity(currentProfile.id, 'purchase', 'purchase_user.updated', {
         target_user_id: user!.id,
         role,
-        departments,
         department_admin_for: payload.department_admin_for,
       })
     }
@@ -95,7 +84,7 @@ export default function UserFormModal({
     <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 px-4">
       <div className="w-full max-w-md bg-bg border border-border rounded-lg shadow-sm">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h2 className="text-sm font-medium text-text">{isNew ? 'Add user' : 'Edit user'}</h2>
+          <h2 className="text-sm font-medium text-text">{isNew ? 'Add Purchase user' : 'Edit Purchase user'}</h2>
           <button onClick={onClose} className="text-text-secondary hover:text-text transition-colors">
             <X size={16} />
           </button>
@@ -161,89 +150,30 @@ export default function UserFormModal({
               <label className="block text-sm text-text-secondary mb-1.5">Role</label>
               <select
                 value={role}
-                onChange={(e) => setRole(e.target.value as Role)}
+                onChange={(e) => setRole(e.target.value as Exclude<Role, 'admin'>)}
                 className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-text-secondary transition-colors"
               >
-                <option value="admin">Admin</option>
                 <option value="manager">Manager</option>
                 <option value="merchant">Merchant</option>
                 <option value="custom">Custom</option>
               </select>
+              <p className="text-xs text-text-secondary mt-1.5">
+                Scoped to Purchase only. To assign a global Admin role, use the main Admin &gt; Users page.
+              </p>
             </div>
 
-            {role === 'manager' && (
-              <div>
-                <label className="block text-sm text-text-secondary mb-1.5">Hall</label>
-                <input
-                  value={hall}
-                  onChange={(e) => setHall(e.target.value)}
-                  className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-text-secondary transition-colors"
-                />
-              </div>
-            )}
-
-            {role === 'merchant' && (
-              <div>
-                <label className="block text-sm text-text-secondary mb-1.5">Buyers (comma-separated)</label>
-                <input
-                  value={buyers}
-                  onChange={(e) => setBuyers(e.target.value)}
-                  placeholder="MDM, Joon Loloi"
-                  className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-text-secondary transition-colors"
-                />
-              </div>
-            )}
-
-            {role === 'admin' || role === 'manager' ? (
-              <div>
-                <label className="block text-sm text-text-secondary mb-2">Departments</label>
-                <div className="space-y-1.5">
-                  {DEPARTMENTS.map((d) => (
-                    <label key={d.key} className="flex items-center gap-2 text-sm text-text">
-                      <input
-                        type="checkbox"
-                        checked={departments.includes(d.key)}
-                        onChange={() => toggleDept(d.key)}
-                        className="rounded border-border"
-                      />
-                      {d.label}
-                    </label>
-                  ))}
-                </div>
-                <p className="text-xs text-text-secondary mt-1.5">
-                  {role === 'admin'
-                    ? 'Admins see every department regardless of this list.'
-                    : 'Managers get full access to everything in each department checked here.'}
-                </p>
-              </div>
-            ) : (
-              <p className="text-xs text-text-secondary">
-                Feature access for Custom and Merchant users is granted from Manage Access, not here.
-              </p>
-            )}
-
-            {role !== 'admin' && (
-              <div>
-                <label className="block text-sm text-text-secondary mb-2">Department admin for</label>
-                <div className="space-y-1.5">
-                  {DEPARTMENTS.map((d) => (
-                    <label key={d.key} className="flex items-center gap-2 text-sm text-text">
-                      <input
-                        type="checkbox"
-                        checked={departmentAdminFor.includes(d.key)}
-                        onChange={() => toggleDeptAdmin(d.key)}
-                        className="rounded border-border"
-                      />
-                      {d.label}
-                    </label>
-                  ))}
-                </div>
-                <p className="text-xs text-text-secondary mt-1.5">
-                  Full admin-equivalent power, scoped to just that department — can manage its price grid, edit
-                  saved data, and manage its users.
-                </p>
-              </div>
-            )}
+            <label className="flex items-center gap-2 text-sm text-text">
+              <input
+                type="checkbox"
+                checked={isDeptAdmin}
+                onChange={(e) => setIsDeptAdmin(e.target.checked)}
+                className="rounded border-border"
+              />
+              Make this person a Purchase department admin
+            </label>
+            <p className="text-xs text-text-secondary -mt-2">
+              Full admin-equivalent power within Purchase only — can manage price grid, edit saved rows, and manage other Purchase users.
+            </p>
 
             {error && <p className="text-sm text-red-600">{error}</p>}
 

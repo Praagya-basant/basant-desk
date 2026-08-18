@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { isAdmin } from '../../lib/access'
+import { isAdminOrDeptAdmin } from '../../lib/access'
 import {
   buildPriceGridRecord,
   fetchExtraction,
@@ -93,7 +93,7 @@ function EditableRow({
 
   if (!editing) {
     return (
-      <tr className={`border-b border-border last:border-0 ${row.flagged ? 'border-l-2 border-l-amber-400' : ''}`}>
+      <tr className={`border-b border-border last:border-0 ${row.flagged ? 'border-l-2 border-l-amber-400' : row.defaulted_cell ? 'border-l-2 border-l-sky-300' : ''}`}>
         <td className="px-4 py-2.5 text-text">
           {row.code || '—'}
           {row.flagged && <p className="text-xs text-text-secondary mt-0.5">{row.flag_reason}</p>}
@@ -101,7 +101,14 @@ function EditableRow({
         <td className="px-4 py-2.5 text-center text-text">{row.l ?? '—'}</td>
         <td className="px-4 py-2.5 text-center text-text">{row.w ?? '—'}</td>
         <td className="px-4 py-2.5 text-center text-text">{row.thickness_mm ?? '—'}</td>
-        <td className="px-4 py-2.5 text-center text-text">{row.cell ?? '—'}</td>
+        <td className="px-4 py-2.5 text-center text-text">
+          {row.cell ?? '—'}
+          {row.defaulted_cell && (
+            <span className="inline-block text-[11px] leading-none text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-1 mt-1.5 whitespace-nowrap">
+              Defaulted
+            </span>
+          )}
+        </td>
         <td className="px-4 py-2.5 text-center text-text">{row.sheet_qty}</td>
         <td className="px-4 py-2.5 text-right text-text tabular-nums">{row.rate != null ? row.rate.toFixed(2) : '—'}</td>
         <td className="px-4 py-2.5 text-right">
@@ -174,7 +181,7 @@ function EditableRow({
 export default function HCExtractionDetail() {
   const { id } = useParams<{ id: string }>()
   const { profile } = useAuth()
-  const admin = isAdmin(profile)
+  const canEdit = isAdminOrDeptAdmin(profile, 'purchase')
 
   const [extraction, setExtraction] = useState<HCExtraction | null>(null)
   const [rows, setRows] = useState<HCExtractionRow[]>([])
@@ -197,7 +204,10 @@ export default function HCExtractionDetail() {
       setExtraction(ex)
       setRows(exRows)
       setHistory(exHistory)
-      setGrid(buildPriceGridRecord(priceGrid))
+      // Rates were originally calculated against this extraction's own
+      // supplier — scope the grid to that supplier so any post-save edit
+      // recalculates against the same numbers, not a different supplier's.
+      setGrid(buildPriceGridRecord(priceGrid.filter((g) => g.supplier === ex.supplier)))
 
       const userIds = [ex.created_by, ...exHistory.map((h) => h.edited_by)].filter((v): v is string => !!v)
       setNames(await fetchUserNames(userIds))
@@ -224,13 +234,14 @@ export default function HCExtractionDetail() {
       <h1 className="text-lg font-medium text-text mb-1">Extraction — {new Date(extraction.created_at).toLocaleString()}</h1>
       <p className="text-sm text-text-secondary mb-6">
         {extraction.created_by ? names.get(extraction.created_by) ?? 'Unknown' : 'Unknown'} · {extraction.source_type} ·{' '}
-        <span className="capitalize">{extraction.status}</span>
+        {extraction.supplier} · <span className="capitalize">{extraction.status}</span>
       </p>
 
       <SummaryStrip
         rowCount={rows.length}
         totalRate={extraction.total_rate}
         flaggedCount={rows.filter((r) => r.flagged).length}
+        supplier={extraction.supplier}
       />
 
       <div className="border border-border rounded-lg overflow-x-auto mb-8">
@@ -244,15 +255,15 @@ export default function HCExtractionDetail() {
               <th className="font-medium px-4 py-2.5 text-center">Cell</th>
               <th className="font-medium px-4 py-2.5 text-center">Sheet Qty</th>
               <th className="font-medium px-4 py-2.5 text-right">Rate</th>
-              {admin && <th className="font-medium px-4 py-2.5"></th>}
+              {canEdit && <th className="font-medium px-4 py-2.5"></th>}
             </tr>
           </thead>
           <tbody>
             {rows.map((row) =>
-              admin ? (
+              canEdit ? (
                 <EditableRow key={row.id} row={row} grid={grid} editedBy={profile!.id} onSaved={load} />
               ) : (
-                <tr key={row.id} className={`border-b border-border last:border-0 ${row.flagged ? 'border-l-2 border-l-amber-400' : ''}`}>
+                <tr key={row.id} className={`border-b border-border last:border-0 ${row.flagged ? 'border-l-2 border-l-amber-400' : row.defaulted_cell ? 'border-l-2 border-l-sky-300' : ''}`}>
                   <td className="px-4 py-2.5 text-text">
                     {row.code || '—'}
                     {row.flagged && <p className="text-xs text-text-secondary mt-0.5">{row.flag_reason}</p>}
@@ -260,7 +271,14 @@ export default function HCExtractionDetail() {
                   <td className="px-4 py-2.5 text-center text-text">{row.l ?? '—'}</td>
                   <td className="px-4 py-2.5 text-center text-text">{row.w ?? '—'}</td>
                   <td className="px-4 py-2.5 text-center text-text">{row.thickness_mm ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-center text-text">{row.cell ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-center text-text">
+                    {row.cell ?? '—'}
+                    {row.defaulted_cell && (
+                      <span className="inline-block text-[11px] leading-none text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-1 mt-1.5 whitespace-nowrap">
+                        Defaulted
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-2.5 text-center text-text">{row.sheet_qty}</td>
                   <td className="px-4 py-2.5 text-right text-text tabular-nums">{row.rate != null ? row.rate.toFixed(2) : '—'}</td>
                 </tr>
