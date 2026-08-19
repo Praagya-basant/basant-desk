@@ -1,11 +1,9 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
-import { isAdminOrDeptAdmin } from '../../lib/access'
 import {
   extractHCRows,
-  lookupRate,
   getFlagReason,
   getDescriptionsFromPastedText,
   type ExtractionResult,
@@ -14,17 +12,16 @@ import {
 import { fetchSuppliers, fetchPriceGridForSupplier, saveExtraction, buildPriceGridRecord } from '../../lib/purchase/db'
 import { parseExcelDescriptions } from '../../lib/purchase/parseExcel'
 import { logActivity } from '../../lib/activityLog'
-import type { PreviewField } from '../../components/purchase/ExtractionPreviewTable'
 import ExtractionPreviewTable from '../../components/purchase/ExtractionPreviewTable'
 import SummaryStrip from '../../components/purchase/SummaryStrip'
 import Toast from '../../components/Toast'
 
 type Mode = 'paste' | 'upload'
 
+const DEFAULT_SUPPLIER = 'AB Craft'
+
 export default function HCExtraction() {
   const { profile } = useAuth()
-  const navigate = useNavigate()
-  const canEdit = isAdminOrDeptAdmin(profile, 'purchase')
 
   const [mode, setMode] = useState<Mode>('paste')
   const [pasteText, setPasteText] = useState('')
@@ -39,6 +36,7 @@ export default function HCExtraction() {
   const [gridError, setGridError] = useState<string | null>(null)
 
   const [result, setResult] = useState<ExtractionResult | null>(null)
+  const [savedExtractionId, setSavedExtractionId] = useState<string | null>(null)
   const [extracting, setExtracting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [savedToast, setSavedToast] = useState(false)
@@ -46,7 +44,12 @@ export default function HCExtraction() {
 
   useEffect(() => {
     fetchSuppliers()
-      .then(setSuppliers)
+      .then((list) => {
+        setSuppliers(list)
+        // Pre-select AB Craft when it's present; otherwise leave the
+        // dropdown for the user to choose explicitly.
+        setSupplier((current) => current || (list.includes(DEFAULT_SUPPLIER) ? DEFAULT_SUPPLIER : current))
+      })
       .catch((e) => setSuppliersError(e.message))
   }, [])
 
@@ -86,14 +89,20 @@ export default function HCExtraction() {
     }
   }
 
+  // Extraction and save are one action now — there's no separate "Save"
+  // step to gate on flagged rows. A saved extraction with flagged/defaulted
+  // rows is corrected afterward via the history detail page's edit flow
+  // (Admin / department_admin_for('purchase') only), not before saving.
   function handleExtract() {
     if (!grid || !supplier) return
     setExtracting(true)
     setError(null)
+    setResult(null)
+    setSavedExtractionId(null)
 
     // Yield to the browser so the "Extracting…" state actually paints before
     // the (potentially heavy, synchronous) parsing work runs on large files.
-    setTimeout(() => {
+    setTimeout(async () => {
       const lines = mode === 'paste' ? getDescriptionsFromPastedText(pasteText) : (fileLines ?? [])
       if (lines.length === 0) {
         setError(mode === 'paste' ? 'Paste some description rows first.' : 'Upload a file first.')
@@ -101,73 +110,37 @@ export default function HCExtraction() {
         return
       }
 
-      setResult(extractHCRows(lines, grid))
+      const extracted = extractHCRows(lines, grid)
+      setResult(extracted)
       setExtracting(false)
+
+      if (extracted.rows.length === 0 || !profile) return
+
+      setSaving(true)
+      try {
+        const id = await saveExtraction({
+          createdBy: profile.id,
+          sourceType: mode === 'paste' ? 'paste' : 'excel',
+          supplier,
+          rows: extracted.rows,
+        })
+        await logActivity(profile.id, 'purchase', 'hc_extraction.saved', {
+          extraction_id: id,
+          supplier,
+          row_count: extracted.rows.length,
+          total_rate: extracted.totalRate,
+        })
+        setSavedExtractionId(id)
+        setSavedToast(true)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Extraction ran, but saving it failed.')
+      } finally {
+        setSaving(false)
+      }
     }, 0)
   }
 
-  function handleFieldChange(index: number, field: PreviewField, value: string) {
-    if (!result || !grid) return
-    const rows = [...result.rows]
-    const row = { ...rows[index] }
-
-    switch (field) {
-      case 'code':
-        row.code = value
-        break
-      case 'l':
-      case 'w':
-        row[field] = value === '' ? NaN : Number(value)
-        break
-      case 'sheetQty':
-        row.sheetQty = value === '' ? 1 : Number(value)
-        break
-      case 'thicknessMm':
-      case 'cell':
-        row[field] = value === '' ? null : Number(value)
-        if (field === 'cell') row.defaultedCell = false
-        break
-    }
-
-    row.rate =
-      row.thicknessMm !== null && row.cell !== null && !Number.isNaN(row.l) && !Number.isNaN(row.w)
-        ? lookupRate(row.l, row.w, row.thicknessMm, row.cell, row.sheetQty, grid)
-        : null
-
-    rows[index] = row
-    const totalRate = rows.reduce((sum, r) => sum + (r.rate ?? 0), 0)
-    setResult({ ...result, rows, totalRate: Math.round(totalRate * 100) / 100 })
-  }
-
   const flaggedCount = result?.rows.filter((r) => getFlagReason(r) !== null).length ?? 0
-  const canSave = result != null && result.rows.length > 0 && (canEdit || flaggedCount === 0)
-
-  async function handleSave() {
-    if (!result || !profile || !supplier) return
-    setSaving(true)
-    setError(null)
-    try {
-      const id = await saveExtraction({
-        createdBy: profile.id,
-        sourceType: mode === 'paste' ? 'paste' : 'excel',
-        supplier,
-        rows: result.rows,
-      })
-      await logActivity(profile.id, 'purchase', 'hc_extraction.saved', {
-        extraction_id: id,
-        supplier,
-        row_count: result.rows.length,
-        total_rate: result.totalRate,
-      })
-      setSaving(false)
-      setSavedToast(true)
-      // brief pause so the confirmation is actually seen before we navigate away
-      setTimeout(() => navigate(`/purchase/hc-extraction/history/${id}`), 900)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save this extraction.')
-      setSaving(false)
-    }
-  }
 
   return (
     <div className="max-w-4xl">
@@ -240,11 +213,11 @@ export default function HCExtraction() {
       <div className="mb-6">
         <button
           onClick={handleExtract}
-          disabled={extracting || !supplier || !grid}
+          disabled={extracting || saving || !supplier || !grid}
           className="flex items-center gap-2 rounded-md bg-text text-bg text-sm font-medium px-4 py-2 hover:opacity-90 transition-opacity disabled:opacity-50"
         >
-          {extracting && <Loader2 size={14} className="animate-spin" />}
-          {extracting ? 'Extracting…' : 'Extract'}
+          {(extracting || saving) && <Loader2 size={14} className="animate-spin" />}
+          {extracting ? 'Extracting…' : saving ? 'Saving…' : 'Extract'}
         </button>
         {!supplier && <p className="text-sm text-text-secondary mt-2">Select a supplier to continue.</p>}
       </div>
@@ -260,23 +233,17 @@ export default function HCExtraction() {
             supplier={supplier}
           />
 
-          <ExtractionPreviewTable rows={result.rows} editable={canEdit} onFieldChange={handleFieldChange} />
+          <ExtractionPreviewTable rows={result.rows} editable={false} />
 
-          {!canEdit && flaggedCount > 0 && (
+          {savedExtractionId && (
             <p className="text-sm text-text-secondary mt-3">
-              {flaggedCount} row{flaggedCount === 1 ? '' : 's'} need admin correction before this can be saved — ask
-              an admin to fix and save, or re-run extraction with corrected input.
+              Saved.{' '}
+              <Link to={`/purchase/hc-extraction/history/${savedExtractionId}`} className="text-text underline hover:no-underline">
+                View in history
+              </Link>
+              {flaggedCount > 0 && ' to correct flagged rows.'}
             </p>
           )}
-
-          <button
-            onClick={handleSave}
-            disabled={!canSave || saving}
-            className="flex items-center gap-2 mt-4 rounded-md bg-text text-bg text-sm font-medium px-4 py-2 hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            {saving && <Loader2 size={14} className="animate-spin" />}
-            {saving ? 'Saving…' : 'Save extraction'}
-          </button>
 
           {result.unparsed.length > 0 && (
             <div className="mt-10">

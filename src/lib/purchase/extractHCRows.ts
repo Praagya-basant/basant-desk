@@ -15,9 +15,17 @@
  *
  * Price grid: the PRICE_GRID constant below is a fallback default only.
  * The app always passes the live, admin-editable grid from
- * purchase.hc_price_grid (see db.ts's buildPriceGridRecord) into
- * extractHCRows/parseDescription/lookupRate, so the grid shown in the UI
- * and the grid used to calculate rates never drift apart.
+ * purchase.hc_price_grid (see db.ts's buildPriceGridRecord), already
+ * filtered to the selected supplier, into extractHCRows/parseDescription/
+ * lookupRate — so the grid shown in the UI and the grid used to calculate
+ * rates never drift apart. Supplier selection itself lives one layer up
+ * (the caller); this module just consumes whichever grid it's handed.
+ *
+ * Multi-code fix: a description can contain MORE THAN ONE product code
+ * (e.g. two codes pasted as one block, or one messy Excel cell). Every code
+ * token is found up front and the text is split into one segment per code
+ * BEFORE dimensions are parsed, so a later code's sizes can never bleed
+ * into an earlier code's rows (and vice versa).
  */
 
 // ---------------------------------------------------------------------------
@@ -75,6 +83,67 @@ export interface ExtractionResult {
 }
 
 // ---------------------------------------------------------------------------
+// Code-token segmentation
+// ---------------------------------------------------------------------------
+
+// A Code token: letters+digits (e.g. BT0107C), optionally digits-first
+// (e.g. 451W), optionally with a second code after a slash
+// (BT0020W/BT0020S). `\b` on both ends means it can only match a token that
+// is ENTIRELY letters/digits with a real word boundary at each end — so it
+// can never match a fragment from inside a dimension like "91X8" or "10X8"
+// (those have no internal boundary to land on).
+const CODE_TOKEN_RE = /\b([A-Za-z]+\d+[A-Za-z]*(?:\/[A-Za-z]+\d+[A-Za-z]*)?|\d+[A-Za-z]+)\b/g
+
+// Words that share the same letter+digit shape as a real code but are
+// actually units/descriptors (e.g. "30MM", "12CELL") — reject these so they
+// never get mistaken for a new product code and split a segment wrongly.
+const RESERVED_UNIT_WORDS = new Set(['MM', 'CELL', 'HC', 'INCH'])
+
+function isRealCodeToken(token: string): boolean {
+  const trailingLetters = token.match(/[A-Za-z]+$/)
+  return !(trailingLetters && RESERVED_UNIT_WORDS.has(trailingLetters[0].toUpperCase()))
+}
+
+interface CodeSegment {
+  code: string
+  body: string
+}
+
+/** Splits raw text into one segment per Code token found, each segment's
+ * body running from right after that code to right before the next one. */
+function splitIntoCodeSegments(text: string): CodeSegment[] {
+  const rawMatches = [...text.matchAll(CODE_TOKEN_RE)]
+  const accepted: RegExpMatchArray[] = []
+
+  for (const m of rawMatches) {
+    const token = m[0]
+    if (!isRealCodeToken(token)) continue
+
+    // Some descriptions retype a short fragment of the current code before
+    // each size group (e.g. "BT0357M 357M 34 18.5 ... 357M 28 9 ...") — a
+    // shorter token that's just a substring of the code we're already in is
+    // noise, not a genuinely new product code, so don't start a new segment.
+    const prevCode = accepted[accepted.length - 1]?.[0]
+    if (prevCode && token.length < prevCode.length && prevCode.toUpperCase().includes(token.toUpperCase())) {
+      continue
+    }
+
+    accepted.push(m)
+  }
+
+  const segments: CodeSegment[] = []
+  for (let i = 0; i < accepted.length; i++) {
+    const current = accepted[i]
+    const next = accepted[i + 1]
+    const start = current.index! + current[0].length
+    const end = next ? next.index! : text.length
+    segments.push({ code: current[0], body: text.slice(start, end) })
+  }
+
+  return segments
+}
+
+// ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
@@ -83,13 +152,6 @@ interface DimensionMatch {
   end: number
   l: string
   w: string
-}
-
-function extractCode(description: string): string | null {
-  // First token: letters/digits, optionally with a single slash variant
-  // e.g. BT0107C, BT0419G/BT0497R, 451W
-  const match = description.match(/^\s*([A-Za-z0-9]+(?:\/[A-Za-z0-9]+)?)/)
-  return match ? match[1] : null
 }
 
 /**
@@ -166,31 +228,25 @@ export function getFlagReason(row: Pick<HCRow, 'l' | 'w' | 'thicknessMm' | 'cell
 }
 
 // ---------------------------------------------------------------------------
-// Core parser: one description string -> zero or more HCRow, or "unparsed"
+// Core parser: one Code segment's body -> zero or more HCRow, or "unparsed"
 // ---------------------------------------------------------------------------
 
-export function parseDescription(
-  description: string,
-  grid: PriceGrid = PRICE_GRID,
+function parseSegment(
+  code: string,
+  body: string,
+  sourceDescription: string,
+  grid: PriceGrid,
 ): { rows: HCRow[]; unparsed: UnparsedLine | null } {
-  const raw = description ?? ''
-  const code = extractCode(raw)
-
-  if (!code) {
-    return { rows: [], unparsed: { code: null, description: raw, reason: 'no-code-found' } }
-  }
-
-  let rest = raw.slice(code.length)
-  rest = rest.replace(/\t/g, ' ').replace(/×/g, 'x').replace(/\[/g, '(').replace(/\]/g, ')')
+  let rest = body.replace(/\t/g, ' ').replace(/×/g, 'x').replace(/\[/g, '(').replace(/\]/g, ')')
   rest = rest.replace(/\s+/g, ' ').trim()
   rest = stripRepeatedCodeFragments(rest, code)
   rest = rest.replace(/\s+/g, ' ').trim()
 
   const dims = findDimensionMatches(rest)
 
-  // No dimension anywhere in the line (e.g. "BT0386H HONEYCOMB SET BY64")
+  // No dimension anywhere for this code (e.g. "BT0386H HONEYCOMB SET BY64")
   if (dims.length === 0) {
-    return { rows: [], unparsed: { code, description: raw, reason: 'no-dimension-found' } }
+    return { rows: [], unparsed: { code, description: sourceDescription, reason: 'no-dimension-found' } }
   }
 
   const rows: HCRow[] = []
@@ -217,7 +273,7 @@ export function parseDescription(
     if (cellForward) cell = parseInt(cellForward[1], 10)
 
     // ...but sometimes written BEFORE the dimension. Only safe to check this
-    // when there's exactly one dimension in the whole line (otherwise we'd
+    // when there's exactly one dimension in this segment (otherwise we'd
     // risk grabbing another size's thickness/cell).
     if ((thicknessMm === null || cell === null) && dims.length === 1) {
       const thickBackward = backward.match(/(\d+(?:\.\d+)?)\s*mm/i)
@@ -249,11 +305,47 @@ export function parseDescription(
       sheetQty,
       rate,
       defaultedCell,
-      sourceDescription: raw,
+      sourceDescription,
     })
   }
 
   return { rows, unparsed: null }
+}
+
+// ---------------------------------------------------------------------------
+// One description -> every code segment within it
+// ---------------------------------------------------------------------------
+
+export function parseDescription(
+  description: string,
+  grid: PriceGrid = PRICE_GRID,
+): { rows: HCRow[]; unparsed: UnparsedLine[] } {
+  const raw = description ?? ''
+  const segments = splitIntoCodeSegments(raw)
+
+  if (segments.length === 0) {
+    return { rows: [], unparsed: [{ code: null, description: raw, reason: 'no-code-found' }] }
+  }
+
+  const rows: HCRow[] = []
+  const unparsed: UnparsedLine[] = []
+
+  for (const seg of segments) {
+    const result = parseSegment(seg.code, seg.body, raw, grid)
+    rows.push(...result.rows)
+    if (result.unparsed) unparsed.push(result.unparsed)
+  }
+
+  // If nothing in this description produced a usable row, there's no real
+  // size data anywhere in it — report that once for the whole description
+  // rather than once per incidental code-shaped token in free-text notes
+  // (e.g. "HONEYCOMB SET BY64" contains "BY64", which matches the code
+  // pattern but is just descriptive text, not a second product).
+  if (rows.length === 0 && unparsed.length > 1) {
+    return { rows: [], unparsed: [unparsed[0]] }
+  }
+
+  return { rows, unparsed }
 }
 
 // ---------------------------------------------------------------------------
@@ -267,20 +359,26 @@ export function extractHCRows(descriptions: string[], grid: PriceGrid = PRICE_GR
   for (const desc of descriptions) {
     if (desc === null || desc === undefined || String(desc).trim() === '') continue
     const result = parseDescription(String(desc), grid)
-    if (result.unparsed) {
-      unparsed.push(result.unparsed)
-    } else {
-      rows.push(...result.rows)
-    }
+    rows.push(...result.rows)
+    unparsed.push(...result.unparsed)
   }
 
-  const totalRate = rows.reduce((sum, r) => sum + (r.rate ?? 0), 0)
+  // Deduplicate exact duplicate rows (same code + size + thickness/cell/qty)
+  const seen = new Set<string>()
+  const deduped = rows.filter((r) => {
+    const key = `${r.code}|${r.l}|${r.w}|${r.thicknessMm}|${r.cell}|${r.sheetQty}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+
+  const totalRate = deduped.reduce((sum, r) => sum + (r.rate ?? 0), 0)
 
   return {
-    rows,
+    rows: deduped,
     unparsed,
     totalDescriptionsRead: descriptions.filter((d) => d && String(d).trim() !== '').length,
-    totalRowsProduced: rows.length,
+    totalRowsProduced: deduped.length,
     totalRate: Math.round(totalRate * 100) / 100,
   }
 }

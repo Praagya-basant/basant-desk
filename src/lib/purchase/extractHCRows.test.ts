@@ -109,12 +109,45 @@ describe('extractHCRows', () => {
     expect(rows[0].rate).not.toBeCloseTo(lookupRate(24, 18, 30, 6, 1, PRICE_GRID)!, 2)
     expect(rows[0].rate).toBeCloseTo(lookupRate(24, 18, 30, 6, 1, customGrid)!, 2)
   })
+
+  it('splits multiple product codes pasted in one block into separate groups, never merging them under the first code', () => {
+    const input =
+      'BT0492E 91X8 (2) 30MM HC SHEET 12 CELL 91X10 (2) 30MM HC SHEET 12 CELL 10X8 (2) 30MM HC SHEET 12 CELL BT0622S 11X5 (1) 60MM HC SHEET 8 CELL 14X6 (1) 25MM HC SHEET 8 CELL'
+
+    const { rows, unparsed } = extractHCRows([input])
+
+    expect(unparsed).toEqual([])
+    expect(rows).toHaveLength(5)
+
+    const bt0492e = rows.filter((r) => r.code === 'BT0492E')
+    const bt0622s = rows.filter((r) => r.code === 'BT0622S')
+
+    expect(bt0492e).toHaveLength(3)
+    expect(bt0492e.every((r) => r.thicknessMm === 30 && r.cell === 12)).toBe(true)
+    expect(bt0492e.map((r) => [r.l, r.w])).toEqual([
+      [91, 8],
+      [91, 10],
+      [10, 8],
+    ])
+
+    expect(bt0622s).toHaveLength(2)
+    expect(bt0622s.map((r) => [r.l, r.w, r.thicknessMm, r.cell])).toEqual([
+      [11, 5, 60, 8],
+      [14, 6, 25, 8],
+    ])
+  })
+
+  it('does not mistake a thickness value like "30MM" for a product code', () => {
+    const { rows } = extractHCRows(['BT0136J 24X18 30MM 8CELL'])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].code).toBe('BT0136J')
+  })
 })
 
 describe('parseDescription', () => {
-  it('returns unparsed for an empty-ish description with no code', () => {
+  it('returns an unparsed entry for an empty-ish description with no code', () => {
     const { unparsed } = parseDescription('')
-    expect(unparsed?.reason).toBe('no-code-found')
+    expect(unparsed).toEqual([{ code: null, description: '', reason: 'no-code-found' }])
   })
 })
 

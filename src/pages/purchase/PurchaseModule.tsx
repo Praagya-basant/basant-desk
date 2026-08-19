@@ -7,11 +7,13 @@ import HCExtractionHistory from './HCExtractionHistory'
 import HCExtractionDetail from './HCExtractionDetail'
 import PriceGridSettings from './PriceGridSettings'
 import PurchaseUsers from './PurchaseUsers'
+import MarbleCosting from './MarbleCosting'
 
 export default function PurchaseModule() {
   return (
     <Routes>
       <Route index element={<PurchaseHome />} />
+      <Route path="marble-costing" element={<MarbleCosting />} />
       <Route
         path="hc-extraction"
         element={
