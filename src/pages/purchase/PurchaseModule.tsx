@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import RequireAdminOrDeptAdmin from '../../components/RequireAdminOrDeptAdmin'
 import RequirePermission from '../../components/RequirePermission'
 import PurchaseHome from './PurchaseHome'
+import HoneycombHome from './HoneycombHome'
 import HCExtraction from './HCExtraction'
 import HCExtractionHistory from './HCExtractionHistory'
 import HCExtractionDetail from './HCExtractionDetail'
@@ -14,8 +15,15 @@ export default function PurchaseModule() {
     <Routes>
       <Route index element={<PurchaseHome />} />
       <Route path="marble-costing" element={<MarbleCosting />} />
+      <Route path="users" element={
+        <RequireAdminOrDeptAdmin departmentKey="purchase">
+          <PurchaseUsers />
+        </RequireAdminOrDeptAdmin>
+      } />
+
+      <Route path="honeycomb" element={<HoneycombHome />} />
       <Route
-        path="hc-extraction"
+        path="honeycomb/extraction"
         element={
           <RequirePermission permissionKey="purchase.hc_extraction">
             <HCExtraction />
@@ -23,7 +31,7 @@ export default function PurchaseModule() {
         }
       />
       <Route
-        path="hc-extraction/history"
+        path="honeycomb/history"
         element={
           <RequirePermission permissionKey="purchase.hc_extraction">
             <HCExtractionHistory />
@@ -31,7 +39,7 @@ export default function PurchaseModule() {
         }
       />
       <Route
-        path="hc-extraction/history/:id"
+        path="honeycomb/history/:id"
         element={
           <RequirePermission permissionKey="purchase.hc_extraction">
             <HCExtractionDetail />
@@ -39,18 +47,10 @@ export default function PurchaseModule() {
         }
       />
       <Route
-        path="settings/price-grid"
+        path="honeycomb/price-grid"
         element={
           <RequireAdminOrDeptAdmin departmentKey="purchase">
             <PriceGridSettings />
-          </RequireAdminOrDeptAdmin>
-        }
-      />
-      <Route
-        path="settings/users"
-        element={
-          <RequireAdminOrDeptAdmin departmentKey="purchase">
-            <PurchaseUsers />
           </RequireAdminOrDeptAdmin>
         }
       />

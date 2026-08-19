@@ -7,6 +7,11 @@ import { useAuth } from '../../contexts/AuthContext'
 import { DEPARTMENTS } from '../../config/departments'
 import type { Role, UserProfile } from '../../types'
 
+// The "Admin" entry in DEPARTMENTS is the global admin section itself, not a
+// real business department — it never makes sense to assign someone as a
+// member or department-admin "of Admin" (that's just the role field).
+const ASSIGNABLE_DEPARTMENTS = DEPARTMENTS.filter((d) => d.key !== 'admin')
+
 function generatePassword() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%'
   return Array.from({ length: 14 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
@@ -198,7 +203,7 @@ export default function UserFormModal({
               <div>
                 <label className="block text-sm text-text-secondary mb-2">Departments</label>
                 <div className="space-y-1.5">
-                  {DEPARTMENTS.map((d) => (
+                  {ASSIGNABLE_DEPARTMENTS.map((d) => (
                     <label key={d.key} className="flex items-center gap-2 text-sm text-text">
                       <input
                         type="checkbox"
@@ -226,7 +231,7 @@ export default function UserFormModal({
               <div>
                 <label className="block text-sm text-text-secondary mb-2">Department admin for</label>
                 <div className="space-y-1.5">
-                  {DEPARTMENTS.map((d) => (
+                  {ASSIGNABLE_DEPARTMENTS.map((d) => (
                     <label key={d.key} className="flex items-center gap-2 text-sm text-text">
                       <input
                         type="checkbox"

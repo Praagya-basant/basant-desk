@@ -238,7 +238,7 @@ export default function HCExtraction() {
           {savedExtractionId && (
             <p className="text-sm text-text-secondary mt-3">
               Saved.{' '}
-              <Link to={`/purchase/hc-extraction/history/${savedExtractionId}`} className="text-text underline hover:no-underline">
+              <Link to={`/purchase/honeycomb/history/${savedExtractionId}`} className="text-text underline hover:no-underline">
                 View in history
               </Link>
               {flaggedCount > 0 && ' to correct flagged rows.'}

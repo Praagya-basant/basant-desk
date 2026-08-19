@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { accessibleDepartments } from '../lib/access'
+import { accessibleDepartments, roleLabel } from '../lib/access'
 
 export default function Sidebar() {
   const { profile, permissionKeys, signOut } = useAuth()
@@ -39,7 +39,7 @@ export default function Sidebar() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm text-text truncate">{profile?.full_name || profile?.email}</p>
-            <p className="text-xs text-text-secondary capitalize">{profile?.role}</p>
+            <p className="text-xs text-text-secondary capitalize">{roleLabel(profile)}</p>
           </div>
           <button
             onClick={() => signOut()}

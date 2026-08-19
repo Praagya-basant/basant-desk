@@ -18,6 +18,20 @@ export function isAdminOrDeptAdmin(profile: UserProfile | null, departmentKey: s
   return isAdmin(profile) || isDepartmentAdmin(profile, departmentKey)
 }
 
+// What to show next to a user's name — distinguishes a true global Admin
+// from someone who's only admin-equivalent within specific department(s),
+// so the UI never implies broader access than the account actually has.
+export function roleLabel(profile: UserProfile | null): string {
+  if (!profile) return ''
+  if (isAdmin(profile)) return 'Admin'
+  const deptAdminFor = profile.department_admin_for ?? []
+  if (deptAdminFor.length > 0) {
+    const labels = deptAdminFor.map((key) => DEPARTMENTS.find((d) => d.key === key)?.label ?? key)
+    return `${labels.join(' / ')} Admin`
+  }
+  return profile.role
+}
+
 // permissionKeys are stored as "department.feature" (e.g. "purchase.hc_extraction").
 function departmentOf(permissionKey: string): string {
   return permissionKey.split('.')[0]
