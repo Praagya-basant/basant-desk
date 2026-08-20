@@ -86,3 +86,26 @@ export function accessibleDepartments(profile: UserProfile | null, permissionKey
       granted.has(d.key),
   )
 }
+
+// Declarative access gate for nav-shell module config (src/config/moduleSections.ts),
+// so sidebar/tab items can state their access rule as data instead of each needing a
+// bespoke useHasAccess/isAdminOrDeptAdmin check wired up by hand.
+export type AccessRule =
+  | { type: 'public' }
+  | { type: 'permission'; key: string }
+  | { type: 'adminOrDeptAdmin'; departmentKey: string }
+
+export function evaluateAccessRule(
+  rule: AccessRule,
+  profile: UserProfile | null,
+  permissionKeys: Set<string>,
+): boolean {
+  switch (rule.type) {
+    case 'public':
+      return true
+    case 'permission':
+      return hasAccess(profile, permissionKeys, rule.key)
+    case 'adminOrDeptAdmin':
+      return isAdminOrDeptAdmin(profile, rule.departmentKey)
+  }
+}

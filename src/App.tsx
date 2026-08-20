@@ -1,14 +1,14 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import RequireAuth from './components/RequireAuth'
 import RequireDepartment from './components/RequireDepartment'
 import RequireAdmin from './components/RequireAdmin'
-import Layout from './components/Layout'
+import DepartmentShell from './components/DepartmentShell'
 import Login from './pages/Login'
-import Welcome from './pages/Welcome'
+import Dashboard from './pages/Dashboard'
 import DepartmentPlaceholder from './pages/DepartmentPlaceholder'
-import AdminModule from './pages/admin/AdminModule'
-import PurchaseModule from './pages/purchase/PurchaseModule'
+import { adminRouteTable } from './pages/admin/adminRoutes'
+import { purchaseRouteTable } from './pages/purchase/purchaseRoutes'
 import { DEPARTMENTS } from './config/departments'
 
 function App() {
@@ -21,11 +21,11 @@ function App() {
           <Route
             element={
               <RequireAuth>
-                <Layout />
+                <Outlet />
               </RequireAuth>
             }
           >
-            <Route path="/" element={<Welcome />} />
+            <Route path="/" element={<Dashboard />} />
 
             {DEPARTMENTS.map((dept) =>
               dept.key === 'admin' ? (
@@ -34,27 +34,24 @@ function App() {
                   path={`${dept.route}/*`}
                   element={
                     <RequireAdmin>
-                      <AdminModule />
+                      <DepartmentShell departmentKey="admin" routeTable={adminRouteTable} />
                     </RequireAdmin>
-                  }
-                />
-              ) : dept.key === 'purchase' ? (
-                <Route
-                  key={dept.key}
-                  path={`${dept.route}/*`}
-                  element={
-                    <RequireDepartment deptKey={dept.key}>
-                      <PurchaseModule />
-                    </RequireDepartment>
                   }
                 />
               ) : (
                 <Route
                   key={dept.key}
-                  path={dept.route}
+                  path={`${dept.route}/*`}
                   element={
                     <RequireDepartment deptKey={dept.key}>
-                      <DepartmentPlaceholder department={dept} />
+                      <DepartmentShell
+                        departmentKey={dept.key}
+                        routeTable={
+                          dept.key === 'purchase'
+                            ? purchaseRouteTable
+                            : [{ path: '', element: <DepartmentPlaceholder department={dept} /> }]
+                        }
+                      />
                     </RequireDepartment>
                   }
                 />
