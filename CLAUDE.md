@@ -10,6 +10,7 @@
 5. After any new Postgres schema, remind the user: Supabase → Settings → API → Exposed schemas (manual step, easy to forget, has caused outages).
 6. When a session makes a real decision or finishes a feature, update this file (or the relevant `docs/*.md` file) before ending the session.
 7. For deep detail on a specific department, read `docs/<department>.md`. Keep this file itself high-level — an index, not the full detail.
+8. **Design system is locked**: read `docs/design-system.md` before building or changing ANY UI. Applies platform-wide, every department, every module — not decided per-module. Do not introduce new colors, fonts, or component styles outside this file.
 
 ---
 
