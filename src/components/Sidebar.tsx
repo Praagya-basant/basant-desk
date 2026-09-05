@@ -1,11 +1,13 @@
 import { NavLink } from 'react-router-dom'
-import { LogOut } from 'lucide-react'
+import { LogOut, ClipboardList } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { accessibleDepartments, roleLabel } from '../lib/access'
+import { useCoreManagementAdmin } from '../hooks/useCoreManagementAdmin'
 
 export default function Sidebar() {
   const { profile, permissionKeys, signOut } = useAuth()
   const departments = accessibleDepartments(profile, permissionKeys)
+  const { allowed: coreManagementAllowed } = useCoreManagementAdmin()
 
   return (
     <aside className="w-60 shrink-0 h-screen sticky top-0 border-r border-border bg-surface flex flex-col">
@@ -31,6 +33,18 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
+
+      {coreManagementAllowed && (
+        <div className="px-3 pb-3">
+          <NavLink
+            to="/core-management"
+            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-text-secondary hover:text-text transition-colors"
+          >
+            <ClipboardList size={16} strokeWidth={1.75} />
+            Core Management
+          </NavLink>
+        </div>
+      )}
 
       <div className="px-3 py-4 border-t border-border">
         <div className="flex items-center gap-2.5 px-3 py-1.5">

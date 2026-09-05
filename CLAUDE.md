@@ -23,7 +23,8 @@
 ## Database pattern
 One Supabase project. Every department gets its own Postgres schema (not a new project, not `public`). New schemas must be manually added to Supabase → Settings → API → Exposed schemas — cannot be done via SQL.
 
-Current schemas: `core` (shared users/roles/departments, built), `purchase` (in progress).
+Current schemas: `core` (shared users/roles/departments, built), `purchase` (in progress),
+`core_management` (built), `yaamya` (in progress — `wood_measurements` table).
 
 ## core.users format
 ```
@@ -65,10 +66,19 @@ Flexible — decided incrementally, not fixed upfront.
 
 ## Departments — build status
 - **Purchase**: in progress, see `docs/purchase.md` for full detail
-- **Production, Sales, HR, Yaamya, Admin**: not started
+- **Yaamya Industries**: in progress — Wood Inward module ported from the old standalone app,
+  see `docs/yaamya.md`
+- **Production, Sales, HR, Admin**: not started
+
+## Core Management (not a department)
+Internal task-tracking module, restricted to Praagya + Amit only (see `core.core_management_admins`
+allowlist + `core.is_core_management_admin()`). Deliberately outside the department switcher and
+`DEPARTMENTS` config — mounted directly in `src/App.tsx` at `/core-management`, plus a separate
+minimal staff surface at `/my-tasks`. Full detail: `docs/core-management.md`.
 
 ## Known gotchas
 - New Postgres schemas need manual exposure in Supabase dashboard — caused a real outage during `core` setup (blank page, 406 errors).
 - Postgres arrays (`departments text[]`) — verify frontend reads these correctly; caused a "no departments assigned" bug despite correct DB data.
 - Vercel MCP connector has had permission issues (403 on deployment creation/listing) — first deploy sometimes needs a manual git push or dashboard trigger.
 - Any parsing/extraction logic must be tested against real multi-item input before considered done — subtle boundary bugs (e.g. off-by-one lookup windows, false-positive pattern matches) only surface under real testing, not code review alone.
+- Yaamya Wood Inward CFT formula is `(L_ft × W_in × H_in × pieces) / 144` — NOT `/1728`. Do not "simplify" it (see `docs/yaamya.md`).

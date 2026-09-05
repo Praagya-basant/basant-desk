@@ -10,6 +10,8 @@ export interface SubModule {
 export const SUB_MODULES: SubModule[] = [
   { department: 'purchase', route: '/purchase/honeycomb', label: 'Honeycomb Calculator' },
   { department: 'purchase', route: '/purchase/marble-costing', label: 'Marble Costing' },
+  { department: 'yaamya', route: '/yaamya/wood-inward', label: 'Wood Inward' },
+  { department: 'yaamya', route: '/yaamya/inward-log', label: 'Inward Log' },
 ]
 
 export function getSubModule(pathname: string): SubModule | undefined {
