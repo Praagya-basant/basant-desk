@@ -88,19 +88,61 @@ of sync this way).
 ### Storage
 Public bucket `mcsp-images` (upload/update: any MCSP member; delete: admin/dept-admin/manager).
 
-### ⚠️ Manual step (done, but verify)
-The `0007` migration adds `mcsp` to `pgrst.db_schemas` via `ALTER ROLE authenticator`, but the
-**Supabase dashboard → Settings → API → Exposed schemas** is the canonical source and will
-overwrite that on the next save there. Confirm `mcsp` is listed in the dashboard.
+### ⚠️ Manual step (done, verified)
+`mcsp` is confirmed listed in Supabase dashboard → Settings → API → Exposed schemas.
+
+### Function grants (migration `0008`)
+Postgres grants `EXECUTE` to `PUBLIC` by default on function creation — every `mcsp.*` function
+was therefore also callable by the anonymous (`anon`) role via PostgREST's auto-exposed
+`/rest/v1/rpc/<name>` endpoints, on top of the intended `authenticated`-only access. Not an active
+vulnerability (every function gates on `auth.uid()`-derived checks that correctly resolve false
+for an anon caller), but closed at the grant layer anyway: `0008` revokes `EXECUTE ... FROM PUBLIC`
+across the whole `mcsp` schema. The explicit `grant execute ... to authenticated` from `0004`–`0006`
+is untouched, so authenticated sessions keep exactly the access they had; the three read-only
+helpers (`current_hall_id`/`is_hall_manager_of`/`owns_buyer`) end up with no grantee at all, since
+nothing calls them directly (only from inside other `SECURITY DEFINER` functions or RLS policies).
+**Any future `create or replace function` in this schema needs the same revoke re-applied** —
+`CREATE OR REPLACE` does not reset grants, but a fresh `CREATE FUNCTION` (new function name) would
+default back to `PUBLIC` execute.
+
+## Phase 2 — data migration (done, 2026-09-05)
+
+Pulled from `ztxqksvexjonqmfyjijf` (temporarily restored — the free-tier 2-active-project limit
+meant pausing Yaamya Industries for the window, then restoring it after; both projects are back to
+their normal state now) directly into the tables above, ids preserved 1:1:
+
+| Table | Rows |
+|---|---|
+| `mcsp.buyers` | 21 |
+| `mcsp.halls` | 7 |
+| `mcsp.samples` | 115 |
+| `mcsp.movements` | 3 (all test/dev data — "Code testing" / "testing of the sample issue" reasons, not real receiving history) |
+
+The live source project turned out to only have the **original minimal schema** applied (no
+`panels`/`panel_movements`/`shift_requests`/`validity_requests`/`notifications`/hop-chain columns
+at all, despite those existing in `MCP-MCS/`'s `schema.sql` reference file) — so there was nothing
+to migrate for MCP/validity/shift/recalls/comments; those old-app tables never had any rows.
+
+**Images**: all 115 objects (~4.9MB) copied from the old public `sample-images` bucket to the new
+`mcsp-images` bucket, same paths, then every `mcsp.samples.image_url` rewritten from the old
+project's domain/bucket to the new one. Copied via a Node script using plain `fetch()` (GET from
+the old bucket, which is public; POST to the new one) — done with the browser anon key since no
+service-role key was available to this session, which required *temporarily* adding an
+`anon`-insert policy on `mcsp-images` for the duration of the copy, reverted immediately after (not
+left in place — see `0008`'s sibling cleanup, applied inline rather than as its own tracked
+migration since it fully undoes a change that was itself never meant to be tracked as permanent).
+
+**Not migrated / not applicable**: `profiles` (21 rows, read for `logged_by`/email-matching only —
+no `core.users` rows created this pass, since no MCSP user accounts were requested yet),
+`merchant_contacts`/`merchant_buyers` (folded into `core.users.buyers` by design, nothing to copy
+structurally), `push_subscriptions`/`app_settings`/`audit_log` (never existed on the live source
+project either).
 
 ## Not yet done (later phases)
 
-- **Data migration from the old project.** `ztxqksvexjonqmfyjijf` is currently paused — needs a
-  temporary restore (user-initiated, not done by Claude — see root CLAUDE.md) to dump `buyers`,
-  `halls`, `samples`, `movements`, `panels`, `panel_movements`, `sample_comments`,
-  `recall_requests`, `shift_requests`, `validity_requests`, `validity_changes`, plus the
-  `sample-images` storage bucket's objects, then transform+load into the tables above (auth users
-  recreated via the existing `create-placeholder-users` pattern, matched by email).
+- **MCSP user accounts.** No `core.users` rows created yet for the 21 old-app profiles (1 global
+  admin already exists — Praagya; `amitjain@basant.info` was also a `super_admin` in the old app).
+  Create via `McspUsers` → Add user (or the `create-placeholder-users` pattern) when ready.
 - **MCP (panels) frontend.** Schema/RLS/RPCs exist (`mcsp.panels`/`mcsp.panel_movements` +
   `checkout_panel`/`return_panel`/`forward_panel`/`retire_panel`/`set_panel_image`); no pages yet.
 - **Forward** (multi-hop) isn't wired in the Samples UI yet — only Issue/Return. `forwardSample()`
