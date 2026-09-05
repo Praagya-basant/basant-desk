@@ -18,13 +18,17 @@
 - **Supabase project**: `basant-desk`, ref `fwedvwhjscdrvgjsdzyk`, region `ap-northeast-1`
 - **GitHub repo**: `Praagya-basant/basant-desk`
 - **Hosting**: Vercel, domain `desk.basant.info` (live)
-- **MCP/MCS** (`ztxqksvexjonqmfyjijf`) and **Yaamya Industries** (`xvgclfsikyndkpumbcvn`, paused) are separate, older Supabase projects — untouched, migrate later as a deliberate step, not now.
+- **MCP/MCS** (`ztxqksvexjonqmfyjijf`, currently paused) is MCSP's old standalone Supabase
+  project, live at `mcsp.basant.info` — untouched, migration in progress on branch
+  `mcsp-migration`, see `docs/mcsp.md`. **Yaamya Industries** (`xvgclfsikyndkpumbcvn`) is a
+  separate, older Supabase project — untouched, migrate later as a deliberate step, not now.
 
 ## Database pattern
 One Supabase project. Every department gets its own Postgres schema (not a new project, not `public`). New schemas must be manually added to Supabase → Settings → API → Exposed schemas — cannot be done via SQL.
 
 Current schemas: `core` (shared users/roles/departments, built), `purchase` (in progress),
-`core_management` (built), `yaamya` (in progress — `wood_measurements` table).
+`core_management` (built), `yaamya` (in progress — `wood_measurements` table),
+`mcsp` (in progress — samples built, panels schema-only, see `docs/mcsp.md`).
 
 ## core.users format
 ```
@@ -50,9 +54,10 @@ Known real example: Yash Jain (yashjain@basant.info) is department_admin_for `['
 |---|---|---|
 | purchase | Purchase | building first — see docs/purchase.md |
 | production | Production | includes Quality Inspection, no separate dept |
-| sales | Sales | MCSP may fold in here later — not decided |
+| sales | Sales | |
 | hr | HR | |
 | yaamya | Yaamya Industries | separate dept |
+| mcsp | MCSP | own department (decided) — see docs/mcsp.md |
 | admin | Admin | control/settings area |
 
 Flexible — decided incrementally, not fixed upfront.
@@ -68,6 +73,9 @@ Flexible — decided incrementally, not fixed upfront.
 - **Purchase**: in progress, see `docs/purchase.md` for full detail
 - **Yaamya Industries**: in progress — Wood Inward module ported from the old standalone app,
   see `docs/yaamya.md`
+- **MCSP**: in progress — Samples module ported from the old standalone BASANT MCSP app
+  (`mcsp.basant.info`), panels not yet built, old project not yet migrated/decommissioned,
+  see `docs/mcsp.md`
 - **Production, Sales, HR, Admin**: not started
 
 ## Core Management (not a department)
@@ -82,3 +90,5 @@ minimal staff surface at `/my-tasks`. Full detail: `docs/core-management.md`.
 - Vercel MCP connector has had permission issues (403 on deployment creation/listing) — first deploy sometimes needs a manual git push or dashboard trigger.
 - Any parsing/extraction logic must be tested against real multi-item input before considered done — subtle boundary bugs (e.g. off-by-one lookup windows, false-positive pattern matches) only surface under real testing, not code review alone.
 - Yaamya Wood Inward CFT formula is `(L_ft × W_in × H_in × pieces) / 144` — NOT `/1728`. Do not "simplify" it (see `docs/yaamya.md`).
+- Every new table needs RLS enabled **at creation time**, not added later — an admin-allowlist table (`core.core_management_admins`) shipped without it and sat exposed to the anon/authenticated key until fixed (`supabase/migrations/0001_core_management_admins_rls.sql`). Run Supabase's security advisor against any new table before considering it done.
+- MCSP's `hall`/`buyers` scoping matches by **name**, not id (`core.users.hall`/`core.users.buyers` are plain text/text[], not FKs) — renaming a hall or buyer in `mcsp.halls`/`mcsp.buyers` silently breaks that match for any user still pointed at the old name. See `docs/mcsp.md`.

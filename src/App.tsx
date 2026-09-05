@@ -13,6 +13,7 @@ import DepartmentPlaceholder from './pages/DepartmentPlaceholder'
 import AdminModule from './pages/admin/AdminModule'
 import PurchaseModule from './pages/purchase/PurchaseModule'
 import YaamyaModule from './pages/yaamya/YaamyaModule'
+import McspModule from './pages/mcsp/McspModule'
 import ActiveTasks from './pages/coreManagement/ActiveTasks'
 import AllTasks from './pages/coreManagement/AllTasks'
 import DelayedTasks from './pages/coreManagement/DelayedTasks'
@@ -67,6 +68,16 @@ function App() {
                   element={
                     <RequireDepartment deptKey={dept.key}>
                       <YaamyaModule />
+                    </RequireDepartment>
+                  }
+                />
+              ) : dept.key === 'mcsp' ? (
+                <Route
+                  key={dept.key}
+                  path={`${dept.route}/*`}
+                  element={
+                    <RequireDepartment deptKey={dept.key}>
+                      <McspModule />
                     </RequireDepartment>
                   }
                 />
