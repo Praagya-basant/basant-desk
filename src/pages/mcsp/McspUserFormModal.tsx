@@ -28,7 +28,7 @@ export default function McspUserFormModal({
   const [role, setRole] = useState<Exclude<Role, 'admin'>>(
     user?.role === 'admin' ? 'custom' : (user?.role ?? 'custom'),
   )
-  const [isDeptAdmin, setIsDeptAdmin] = useState(user?.department_admin_for?.includes('mcsp') ?? false)
+  const [isDeptAdmin, setIsDeptAdmin] = useState(user?.department_admin_for?.includes('sales') ?? false)
   const [hall, setHall] = useState(user?.hall ?? '')
   const [buyers, setBuyers] = useState(user?.buyers?.join(', ') ?? '')
   const [password, setPassword] = useState(() => (isNew ? generatePassword() : ''))
@@ -45,10 +45,10 @@ export default function McspUserFormModal({
       full_name: fullName || null,
       email,
       role,
-      departments: ['mcsp'],
+      departments: ['sales'],
       hall: role === 'manager' ? hall.trim() || null : null,
       buyers: role === 'merchant' ? buyers.split(',').map((b) => b.trim()).filter(Boolean) : null,
-      department_admin_for: isDeptAdmin ? ['mcsp'] : [],
+      department_admin_for: isDeptAdmin ? ['sales'] : [],
     }
 
     if (isNew) {
@@ -72,7 +72,7 @@ export default function McspUserFormModal({
     }
 
     if (currentProfile) {
-      await logActivity(currentProfile.id, 'mcsp', 'mcsp_user.updated', {
+      await logActivity(currentProfile.id, 'sales', 'mcsp_user.updated', {
         target_user_id: user!.id,
         role,
         department_admin_for: payload.department_admin_for,
@@ -160,7 +160,7 @@ export default function McspUserFormModal({
                 <option value="custom">Custom</option>
               </select>
               <p className="text-xs text-text-secondary mt-1.5">
-                Scoped to MCSP only. To assign a global Admin role, use the main Admin &gt; Users page.
+                Scoped to Sales (MCSP) only. To assign a global Admin role, use the main Admin &gt; Users page.
               </p>
             </div>
 
@@ -197,11 +197,11 @@ export default function McspUserFormModal({
                 onChange={(e) => setIsDeptAdmin(e.target.checked)}
                 className="rounded border-border"
               />
-              Make this person an MCSP department admin
+              Make this person a Sales department admin
             </label>
             <p className="text-xs text-text-secondary -mt-2">
-              Full admin-equivalent power within MCSP only — can manage buyers/halls, edit any sample or panel, and
-              manage other MCSP users.
+              Full admin-equivalent power within Sales only — can manage buyers/halls, edit any sample or panel, and
+              manage other Sales/MCSP users.
             </p>
 
             {error && <p className="text-sm text-red-600">{error}</p>}

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { X } from 'lucide-react'
-import { createSample, fetchBuyers, fetchHalls } from '../../lib/mcsp/db'
-import type { Buyer, Hall } from '../../lib/mcsp/dbTypes'
+import { createSample, fetchBuyers, fetchHalls, uploadImage } from '../../../lib/mcsp/db'
+import type { Buyer, Hall } from '../../../lib/mcsp/dbTypes'
 
 export default function AddSampleModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [buyers, setBuyers] = useState<Buyer[]>([])
@@ -14,7 +14,11 @@ export default function AddSampleModal({ onClose, onSaved }: { onClose: () => vo
   const [collectionName, setCollectionName] = useState('')
   const [signedBy, setSignedBy] = useState('')
   const [signedDate, setSignedDate] = useState('')
+  const [validityMode, setValidityMode] = useState<'months' | 'date'>('months')
   const [validityMonths, setValidityMonths] = useState('')
+  const [expiryDate, setExpiryDate] = useState('')
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -27,6 +31,11 @@ export default function AddSampleModal({ onClose, onSaved }: { onClose: () => vo
     })
   }, [])
 
+  function handleImage(file: File | null) {
+    setImageFile(file)
+    setImagePreview(file ? URL.createObjectURL(file) : null)
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
@@ -36,6 +45,7 @@ export default function AddSampleModal({ onClose, onSaved }: { onClose: () => vo
     }
     setSaving(true)
     try {
+      const imageUrl = imageFile ? await uploadImage(imageFile) : undefined
       await createSample({
         buyerId,
         hallId,
@@ -45,7 +55,9 @@ export default function AddSampleModal({ onClose, onSaved }: { onClose: () => vo
         collectionName: collectionName.trim() || undefined,
         signedBy: signedBy.trim() || undefined,
         signedDate: signedDate || undefined,
-        validityMonths: validityMonths ? Number(validityMonths) : undefined,
+        validityMonths: validityMode === 'months' && validityMonths ? Number(validityMonths) : undefined,
+        expiryDate: validityMode === 'date' && expiryDate ? expiryDate : undefined,
+        imageUrl,
       })
       onSaved()
     } catch (err) {
@@ -72,7 +84,7 @@ export default function AddSampleModal({ onClose, onSaved }: { onClose: () => vo
               <select
                 value={buyerId}
                 onChange={(e) => setBuyerId(e.target.value)}
-                className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-text-secondary transition-colors"
+                className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors"
               >
                 <option value="">Select…</option>
                 {buyers.map((b) => (
@@ -87,7 +99,7 @@ export default function AddSampleModal({ onClose, onSaved }: { onClose: () => vo
               <select
                 value={hallId}
                 onChange={(e) => setHallId(e.target.value)}
-                className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-text-secondary transition-colors"
+                className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors"
               >
                 <option value="">Select…</option>
                 {halls.map((h) => (
@@ -104,7 +116,7 @@ export default function AddSampleModal({ onClose, onSaved }: { onClose: () => vo
             <input
               value={btCode}
               onChange={(e) => setBtCode(e.target.value)}
-              className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text font-mono outline-none focus:border-text-secondary transition-colors"
+              className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text font-mono outline-none focus:border-accent transition-colors"
             />
           </div>
 
@@ -113,7 +125,7 @@ export default function AddSampleModal({ onClose, onSaved }: { onClose: () => vo
             <input
               value={productName}
               onChange={(e) => setProductName(e.target.value)}
-              className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-text-secondary transition-colors"
+              className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors"
             />
           </div>
 
@@ -123,7 +135,7 @@ export default function AddSampleModal({ onClose, onSaved }: { onClose: () => vo
               <input
                 value={productRef}
                 onChange={(e) => setProductRef(e.target.value)}
-                className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-text-secondary transition-colors"
+                className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors"
               />
             </div>
             <div>
@@ -131,7 +143,7 @@ export default function AddSampleModal({ onClose, onSaved }: { onClose: () => vo
               <input
                 value={collectionName}
                 onChange={(e) => setCollectionName(e.target.value)}
-                className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-text-secondary transition-colors"
+                className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors"
               />
             </div>
           </div>
@@ -142,7 +154,7 @@ export default function AddSampleModal({ onClose, onSaved }: { onClose: () => vo
               <input
                 value={signedBy}
                 onChange={(e) => setSignedBy(e.target.value)}
-                className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-text-secondary transition-colors"
+                className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors"
               />
             </div>
             <div>
@@ -151,19 +163,55 @@ export default function AddSampleModal({ onClose, onSaved }: { onClose: () => vo
                 type="date"
                 value={signedDate}
                 onChange={(e) => setSignedDate(e.target.value)}
-                className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-text-secondary transition-colors"
+                className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-text-secondary mb-1.5">Validity (months)</label>
-            <input
-              type="number"
-              value={validityMonths}
-              onChange={(e) => setValidityMonths(e.target.value)}
-              className="w-32 rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-text-secondary transition-colors"
-            />
+            <label className="block text-sm text-text-secondary mb-2">Validity</label>
+            <div className="flex gap-1.5 mb-2">
+              <button
+                type="button"
+                onClick={() => setValidityMode('months')}
+                className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                  validityMode === 'months' ? 'bg-accent text-white border-accent' : 'border-border text-text-secondary'
+                }`}
+              >
+                Months
+              </button>
+              <button
+                type="button"
+                onClick={() => setValidityMode('date')}
+                className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                  validityMode === 'date' ? 'bg-accent text-white border-accent' : 'border-border text-text-secondary'
+                }`}
+              >
+                Expiry Date
+              </button>
+            </div>
+            {validityMode === 'months' ? (
+              <input
+                type="number"
+                value={validityMonths}
+                onChange={(e) => setValidityMonths(e.target.value)}
+                placeholder="e.g. 12"
+                className="w-32 rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors"
+              />
+            ) : (
+              <input
+                type="date"
+                value={expiryDate}
+                onChange={(e) => setExpiryDate(e.target.value)}
+                className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors"
+              />
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm text-text-secondary mb-1.5">Image</label>
+            <input type="file" accept="image/*" onChange={(e) => handleImage(e.target.files?.[0] ?? null)} className="w-full text-sm text-text" />
+            {imagePreview && <img src={imagePreview} alt="" className="mt-2 w-24 h-24 object-cover rounded-md border border-border" />}
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
@@ -179,7 +227,7 @@ export default function AddSampleModal({ onClose, onSaved }: { onClose: () => vo
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 rounded-md bg-text text-bg text-sm font-medium py-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+              className="flex-1 rounded-md bg-accent text-white text-sm font-medium py-2 hover:bg-accent-hover transition-colors disabled:opacity-50"
             >
               {saving ? 'Saving…' : 'Add Sample'}
             </button>

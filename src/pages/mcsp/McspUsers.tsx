@@ -20,7 +20,7 @@ export default function McspUsers() {
     const { data, error } = await supabase
       .from('users')
       .select('*')
-      .contains('departments', ['mcsp'])
+      .contains('departments', ['sales'])
       .order('created_at', { ascending: true })
 
     if (error) {
@@ -43,7 +43,7 @@ export default function McspUsers() {
     setError(null)
     try {
       await setUserActive(u.id, !u.is_active)
-      await logActivity(currentProfile.id, 'mcsp', u.is_active ? 'mcsp_user.deactivated' : 'mcsp_user.reactivated', {
+      await logActivity(currentProfile.id, 'sales', u.is_active ? 'mcsp_user.deactivated' : 'mcsp_user.reactivated', {
         target_user_id: u.id,
         email: u.email,
       })
@@ -115,7 +115,7 @@ export default function McspUsers() {
                     {u.role === 'manager' ? u.hall || '—' : u.role === 'merchant' ? (u.buyers ?? []).join(', ') || '—' : '—'}
                   </td>
                   <td className="px-4 py-2.5 text-text-secondary">
-                    {u.department_admin_for?.includes('mcsp') ? 'Yes' : '—'}
+                    {u.department_admin_for?.includes('sales') ? 'Yes' : '—'}
                   </td>
                   <td className="px-4 py-2.5 text-text-secondary">{u.is_active ? 'Active' : 'Deactivated'}</td>
                   <td className="px-4 py-2.5 text-right">

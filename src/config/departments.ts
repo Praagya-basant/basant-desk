@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import { ShoppingCart, Factory, TrendingUp, Users, Boxes, ShieldCheck, Layers } from 'lucide-react'
+import { ShoppingCart, Factory, TrendingUp, Users, Boxes, ShieldCheck } from 'lucide-react'
 
 export interface Department {
   key: string
@@ -15,7 +15,6 @@ export const DEPARTMENTS: Department[] = [
   { key: 'sales', label: 'Sales', route: '/sales', icon: TrendingUp },
   { key: 'hr', label: 'HR', route: '/hr', icon: Users },
   { key: 'yaamya', label: 'Yaamya Industries', route: '/yaamya', icon: Boxes },
-  { key: 'mcsp', label: 'MCSP', route: '/mcsp', icon: Layers },
   { key: 'admin', label: 'Admin', route: '/admin', icon: ShieldCheck },
 ]
 

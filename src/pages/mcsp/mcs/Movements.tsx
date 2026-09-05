@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { listMovements } from '../../lib/mcsp/db'
-import type { MovementWithRelations } from '../../lib/mcsp/dbTypes'
+import { listMovements } from '../../../lib/mcsp/db'
+import { exportMovementsToExcel } from '../../../lib/mcsp/exportExcel'
+import type { MovementWithRelations } from '../../../lib/mcsp/dbTypes'
 
 export default function Movements() {
   const [movements, setMovements] = useState<MovementWithRelations[]>([])
@@ -16,9 +17,17 @@ export default function Movements() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-lg font-medium text-text">Movements</h1>
-        <p className="text-sm text-text-secondary mt-0.5">Full checkout / return / forward history.</p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-lg font-medium text-text">Movements</h1>
+          <p className="text-sm text-text-secondary mt-0.5">Full checkout / return / forward history.</p>
+        </div>
+        <button
+          onClick={() => exportMovementsToExcel(movements)}
+          className="rounded-md border border-border text-text text-sm px-3 py-2 hover:bg-surface transition-colors"
+        >
+          Export
+        </button>
       </div>
 
       {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
@@ -26,7 +35,7 @@ export default function Movements() {
       <div className="border border-border rounded-lg overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-surface border-b border-border text-left text-text-secondary">
+            <tr className="bg-surface-2 border-b border-border text-left text-text-secondary">
               <th className="font-medium px-4 py-2.5">BT Code</th>
               <th className="font-medium px-4 py-2.5">Picked By</th>
               <th className="font-medium px-4 py-2.5">Destination</th>

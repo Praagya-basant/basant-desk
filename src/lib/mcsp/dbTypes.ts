@@ -1,6 +1,7 @@
 // Mirrors the mcsp.* schema (supabase/migrations/0002_mcsp_schema_tables.sql).
 // Ported from the standalone BASANT MCSP app — column shapes kept close to
-// the original for a clean data copy. See docs/mcsp.md.
+// the original for a clean data copy. See docs/mcsp.md. MCSP now lives
+// under the Sales department (department key 'sales') — see migration 0009.
 
 export interface Hall {
   id: string
@@ -76,7 +77,7 @@ export interface Panel {
   id: string
   buyer_id: string
   hall_id: string
-  panel_code: string
+  panel_code: string | null
   panel_name: string
   panel_ref: string | null
   panel_finish: string | null
@@ -94,6 +95,11 @@ export interface Panel {
   retired_at: string | null
   retired_by: string | null
   created_at: string
+}
+
+export interface PanelWithRelations extends Panel {
+  buyer: { id: string; name: string } | null
+  hall: { id: string; hall_number: number; name: string } | null
 }
 
 export interface PanelMovement {
@@ -119,6 +125,94 @@ export interface PanelMovement {
   hop_number: number
 }
 
+export interface PanelMovementWithRelations extends PanelMovement {
+  panel: { panel_code: string | null; panel_name: string } | null
+}
+
+export type ItemType = 'sample' | 'panel'
+export type RequestStatus = 'pending' | 'approved' | 'rejected'
+
+export interface SampleComment {
+  id: string
+  sample_id: string
+  author_id: string
+  comment: string
+  created_at: string
+  author?: { full_name: string | null; email: string } | null
+}
+
+export interface RecallRequest {
+  id: string
+  sample_id: string
+  requested_by: string
+  reason: string | null
+  status: 'pending' | 'acknowledged' | 'resolved'
+  created_at: string
+}
+
+export interface ShiftRequest {
+  id: string
+  item_type: ItemType
+  item_id: string
+  from_hall_id: string
+  to_hall_id: string
+  requested_by: string
+  note: string | null
+  status: RequestStatus
+  admin_note: string | null
+  approved_by: string | null
+  approved_at: string | null
+  created_at: string
+}
+
+export interface ShiftRequestWithRelations extends ShiftRequest {
+  from_hall?: { name: string } | null
+  to_hall?: { name: string } | null
+}
+
+export interface ValidityRequest {
+  id: string
+  item_type: ItemType
+  item_id: string
+  requested_by: string
+  requested_months: number | null
+  requested_expiry_date: string | null
+  reason: string | null
+  status: RequestStatus
+  approved_by: string | null
+  approved_at: string | null
+  admin_note: string | null
+  created_at: string
+}
+
+export interface ValidityChange {
+  id: string
+  item_type: ItemType
+  item_id: string
+  changed_by: string
+  old_expiry_date: string | null
+  new_expiry_date: string | null
+  reason: string | null
+  created_at: string
+}
+
 export const REASON_OPTIONS = ['Inspection', 'Production', 'Testing', 'R&D', 'Packaging', 'Other'] as const
 export const NON_HALL_DESTINATIONS = ['Supplier', 'Other'] as const
 export const PURCHASER_OPTIONS = ['Thanaram', 'Suresh Chaudhary', 'Nitin Jain', 'Other'] as const
+
+export type ValidityStatus = 'valid' | 'expiring_soon' | 'expired' | 'none'
+
+/** Days-remaining threshold for the amber "Expiring Soon" badge — matches
+ * the original app's VALIDITY_EXPIRING_SOON_DAYS. */
+export const VALIDITY_EXPIRING_SOON_DAYS = 30
+
+export function getValidityStatus(expiryDate: string | null): ValidityStatus {
+  if (!expiryDate) return 'none'
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const expiry = new Date(expiryDate)
+  const daysLeft = Math.round((expiry.getTime() - today.getTime()) / 86_400_000)
+  if (daysLeft < 0) return 'expired'
+  if (daysLeft <= VALIDITY_EXPIRING_SOON_DAYS) return 'expiring_soon'
+  return 'valid'
+}

@@ -28,7 +28,7 @@ One Supabase project. Every department gets its own Postgres schema (not a new p
 
 Current schemas: `core` (shared users/roles/departments, built), `purchase` (in progress),
 `core_management` (built), `yaamya` (in progress — `wood_measurements` table),
-`mcsp` (in progress — samples built, panels schema-only, see `docs/mcsp.md`).
+`mcsp` (built — MCS + MCP both live, under the **Sales** department; see `docs/mcsp.md`).
 
 ## core.users format
 ```
@@ -54,11 +54,14 @@ Known real example: Yash Jain (yashjain@basant.info) is department_admin_for `['
 |---|---|---|
 | purchase | Purchase | building first — see docs/purchase.md |
 | production | Production | includes Quality Inspection, no separate dept |
-| sales | Sales | |
+| sales | Sales | MCSP (samples + panels) lives here — see docs/mcsp.md |
 | hr | HR | |
 | yaamya | Yaamya Industries | separate dept |
-| mcsp | MCSP | own department (decided) — see docs/mcsp.md |
 | admin | Admin | control/settings area |
+
+Note: `core.departments` still has a stale `mcsp` row (sort_order 13) from MCSP's brief stint as
+its own department — harmless, unused for access-control purposes, not removed since Core
+Management's category tracker also reads this table.
 
 Flexible — decided incrementally, not fixed upfront.
 
@@ -73,10 +76,11 @@ Flexible — decided incrementally, not fixed upfront.
 - **Purchase**: in progress, see `docs/purchase.md` for full detail
 - **Yaamya Industries**: in progress — Wood Inward module ported from the old standalone app,
   see `docs/yaamya.md`
-- **MCSP**: in progress — Samples module ported from the old standalone BASANT MCSP app
-  (`mcsp.basant.info`), panels not yet built, old project not yet migrated/decommissioned,
-  see `docs/mcsp.md`
-- **Production, Sales, HR, Admin**: not started
+- **Sales**: built — MCSP (both MCS/samples and MCP/panels) ported from the old standalone BASANT
+  MCSP app (`mcsp.basant.info`); full workflow (issue/return/retire, validity management, hall
+  shift requests, per-role dashboards, Excel export, in-app notifications) lives at `/sales/mcsp`.
+  Old project not yet decommissioned. See `docs/mcsp.md`.
+- **Production, HR, Admin**: not started
 
 ## Core Management (not a department)
 Internal task-tracking module, restricted to Praagya + Amit only (see `core.core_management_admins`
@@ -92,3 +96,4 @@ minimal staff surface at `/my-tasks`. Full detail: `docs/core-management.md`.
 - Yaamya Wood Inward CFT formula is `(L_ft × W_in × H_in × pieces) / 144` — NOT `/1728`. Do not "simplify" it (see `docs/yaamya.md`).
 - Every new table needs RLS enabled **at creation time**, not added later — an admin-allowlist table (`core.core_management_admins`) shipped without it and sat exposed to the anon/authenticated key until fixed (`supabase/migrations/0001_core_management_admins_rls.sql`). Run Supabase's security advisor against any new table before considering it done.
 - MCSP's `hall`/`buyers` scoping matches by **name**, not id (`core.users.hall`/`core.users.buyers` are plain text/text[], not FKs) — renaming a hall or buyer in `mcsp.halls`/`mcsp.buyers` silently breaks that match for any user still pointed at the old name. See `docs/mcsp.md`.
+- MCSP's Postgres schema is still named `mcsp`, but it lives under the **Sales** department now (not its own department) — every RLS policy/RPC checks `'sales'`, not `'mcsp'`. Don't assume the schema name tells you the department key for anything built after 2026-09-05.

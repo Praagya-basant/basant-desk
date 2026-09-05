@@ -1,46 +1,72 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import McspSidebar from './McspSidebar'
 import RequireAdminOrDeptAdmin from '../../components/RequireAdminOrDeptAdmin'
-import McspHome from './McspHome'
-import Samples from './Samples'
-import Movements from './Movements'
+import McsArea from './mcs/McsArea'
+import McpArea from './mcp/McpArea'
 import Buyers from './Buyers'
 import Halls from './Halls'
 import McspUsers from './McspUsers'
+import ValidityRequestsQueue from './ValidityRequestsQueue'
+import ShiftRequestsQueue from './ShiftRequestsQueue'
+import McspNotificationBell from './McspNotificationBell'
 
+// MCSP now lives under Sales (department key 'sales') — mounted by
+// SalesModule at /sales/mcsp/*. Own local sidebar (MCS|MCP switcher) sits
+// beside the content, inside the platform's normal Layout/breadcrumb shell.
 export default function McspModule() {
   return (
-    <Routes>
-      <Route index element={<McspHome />} />
-      {/* Any MCSP member can view/issue/return samples and view movements —
-          RLS scopes what they actually see (own hall / own buyers). */}
-      <Route path="samples" element={<Samples />} />
-      <Route path="movements" element={<Movements />} />
-
-      {/* Admin surfaces — MCSP department admin or global admin only. */}
-      <Route
-        path="buyers"
-        element={
-          <RequireAdminOrDeptAdmin departmentKey="mcsp">
-            <Buyers />
-          </RequireAdminOrDeptAdmin>
-        }
-      />
-      <Route
-        path="halls"
-        element={
-          <RequireAdminOrDeptAdmin departmentKey="mcsp">
-            <Halls />
-          </RequireAdminOrDeptAdmin>
-        }
-      />
-      <Route
-        path="users"
-        element={
-          <RequireAdminOrDeptAdmin departmentKey="mcsp">
-            <McspUsers />
-          </RequireAdminOrDeptAdmin>
-        }
-      />
-    </Routes>
+    <div className="flex gap-8">
+      <McspSidebar />
+      <div className="flex-1 min-w-0">
+        <div className="flex justify-end mb-2">
+          <McspNotificationBell />
+        </div>
+        <Routes>
+          <Route index element={<Navigate to="mcs" replace />} />
+          <Route path="mcs/*" element={<McsArea />} />
+          <Route path="mcp/*" element={<McpArea />} />
+          <Route
+            path="buyers"
+            element={
+              <RequireAdminOrDeptAdmin departmentKey="sales">
+                <Buyers />
+              </RequireAdminOrDeptAdmin>
+            }
+          />
+          <Route
+            path="halls"
+            element={
+              <RequireAdminOrDeptAdmin departmentKey="sales">
+                <Halls />
+              </RequireAdminOrDeptAdmin>
+            }
+          />
+          <Route
+            path="users"
+            element={
+              <RequireAdminOrDeptAdmin departmentKey="sales">
+                <McspUsers />
+              </RequireAdminOrDeptAdmin>
+            }
+          />
+          <Route
+            path="validity-requests"
+            element={
+              <RequireAdminOrDeptAdmin departmentKey="sales">
+                <ValidityRequestsQueue />
+              </RequireAdminOrDeptAdmin>
+            }
+          />
+          <Route
+            path="shift-requests"
+            element={
+              <RequireAdminOrDeptAdmin departmentKey="sales">
+                <ShiftRequestsQueue />
+              </RequireAdminOrDeptAdmin>
+            }
+          />
+        </Routes>
+      </div>
+    </div>
   )
 }
