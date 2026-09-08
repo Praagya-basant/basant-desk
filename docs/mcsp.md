@@ -41,8 +41,9 @@ original's own dark-theme component library.
   /sales/mcsp/buyers                        Buyer CRUD                     (Sales admin only)
   /sales/mcsp/halls                         Hall CRUD                     (Sales admin only)
   /sales/mcsp/users                         User management scoped to Sales (Sales admin only)
-  /sales/mcsp/validity-requests             Approve/reject queue          (Sales admin only)
-  /sales/mcsp/shift-requests                Approve/reject queue          (Sales admin only)
+  /sales/mcsp/validity-requests             Approve/reject queue      (Sales admin + hall manager)
+  /sales/mcsp/shift-requests                Approve/reject queue      (Sales admin + hall manager)
+  /sales/mcsp/recalls                       Recall review queue           (Sales admin only)
 ```
 
 `SalesModule` (`src/pages/sales/SalesModule.tsx`) mounts `McspModule` — MCSP is Sales' only module
@@ -70,9 +71,10 @@ breaks the match** for any user pointed at the old name — re-save the affected
 
 ## Database — `mcsp` schema
 
-Migrations: `supabase/migrations/0002`–`0013_mcsp_*.sql` (schema/RLS/RPCs in `0002`–`0008`;
+Migrations: `supabase/migrations/0002`–`0017_mcsp_*.sql` (schema/RLS/RPCs in `0002`–`0008`;
 department pivot to Sales in `0009`–`0011`; `panel_code` made optional in `0012`; in-app
-notification RPCs in `0013`).
+notification RPCs in `0013`; **audit fix pass 2026-09-08 in `0014`–`0017`** — see "Audit fix
+pass" below).
 
 `mcsp.halls`, `mcsp.buyers`, `mcsp.samples`, `mcsp.movements` (hop-chain forwarding via
 `hop_number`), `mcsp.panels`, `mcsp.panel_movements`, `mcsp.sample_comments`,
@@ -160,6 +162,38 @@ new `mcsp-images` bucket; every `image_url` rewritten to the new domain/bucket.
 `amitjain@basant.info` were both `super_admin` there) — create via `McspUsers` → Add user when
 ready.
 
+## Audit fix pass — 2026-09-08 (migrations `0014`–`0017`)
+
+A full per-role audit found the module non-functional end to end and ~30 issues. Fixed:
+
+- **`0014` — schema grants.** `mcsp` had `USAGE`/table grants for **nobody** but `postgres`, so
+  every PostgREST request 403'd for every role (the dashboard "Exposed schemas" toggle sets the
+  config but hadn't run the grants). Granted `authenticated`/`service_role` full access, `anon`
+  read, + default privileges. This was the P0 blocker — nothing worked before it.
+- **`0015` — access control.** Hall managers can raise `validity_requests`; anyone who can see a
+  sample can comment (was merchant-only); `movements`/`panel_movements` got an UPDATE policy so
+  return-condition photos actually save; global admins (`departments = []`) can upload images;
+  `notify_shift_requested` no longer notifies **every user in the system** when an admin raises a
+  request; the notification bell is strictly `recipient_id = auth.uid()` (admins/dept-admins no
+  longer see everyone's notifications).
+- **`0016` — manager reviews + data integrity.** `review_shift_request` accepts the from/to hall
+  manager, not just admins; `validity_changes` is readable by the item's hall manager / assigned
+  merchant; unique (case-insensitive) buyer + hall names; `current_hall_id()` trims + lower-cases
+  so a stray space in `core.users.hall` no longer silently hides a manager's whole hall.
+- **`0017` — buyer/hall CRUD + realtime.** `delete_buyer` now refuses if ANY sample/panel still
+  references the buyer (it used to CASCADE-delete them); added `update_buyer`, `update_hall`,
+  `delete_hall`; `mcsp.notifications` added to the `supabase_realtime` publication for the bell.
+
+Frontend: `canAccessDepartment()` now lets merchants (and managers) into a department they're a
+member of — merchants were fully locked out. New `RecallsQueue` page + sidebar item (recalls were
+written to the DB but nothing read them). MCP dashboard got the manager/merchant/admin variants
+MCS already had; both dashboards show a real error state instead of silent zeros. Manager
+"Incoming (shift requests)" is a real count now. Add Sample/Panel lock the hall picker to a
+manager's own hall. Buyers/Halls got inline rename + delete. Design-system: badges + inline pills
+use `--success`/`--warning`/`--info` tokens (no raw Tailwind palette); primary buttons in the
+manage pages use `--accent` not `bg-text`. Movement-history timeline connector no longer dangles.
+Excel export is awaited + surfaces failures. `uploadImage` falls back to a MIME-derived extension.
+
 ## Not yet done
 
 - **Email/Web Push + validity-expiry cron alerts** — in-app notifications only (see above).
@@ -167,7 +201,11 @@ ready.
   `UploadSamplesModal`/`extractSpreadsheetImages` logic) — not ported.
 - **`forwardSample()`/`forwardPanel` multi-hop** — RPC + `db.ts` wrapper exist, no UI calls it yet
   (only Issue/Return are wired into the drawers).
-- Manager dashboard's "Incoming" stat is a placeholder (always 0) — the original app had no direct
-  equivalent metric to port; left as a labeled placeholder rather than guessing at a definition.
+- **Panel comments** — `mcsp.panels` still has no comments table, so `PanelDrawer` has no Comments
+  tab (only samples do).
+- Author/requester names in comments + the recall/request queues are resolved with a plain
+  `core.users` lookup, which returns nothing for a manager/merchant viewing another user's row
+  (their `core.users` RLS only exposes their own row) — shows "—"/"Unknown" in that case rather
+  than a name. A `SECURITY DEFINER` name-resolver would fix it if it becomes annoying.
 - No automated tests added for the MCSP module (mirrors the rest of the platform — only
   `extractHCRows.test.ts` exists repo-wide).

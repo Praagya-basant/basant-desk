@@ -24,6 +24,19 @@ export default function Samples() {
   const [search, setSearch] = useState('')
   const [adding, setAdding] = useState(false)
   const [selected, setSelected] = useState<SampleWithRelations | null>(null)
+  const [exporting, setExporting] = useState(false)
+
+  async function handleExport() {
+    setExporting(true)
+    setError(null)
+    try {
+      await exportSamplesToExcel(filtered)
+    } catch {
+      setError('Could not generate the Excel file. Try again.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   async function load() {
     setLoading(true)
@@ -61,10 +74,11 @@ export default function Samples() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => exportSamplesToExcel(filtered)}
-            className="rounded-md border border-border text-text text-sm px-3 py-2 hover:bg-surface transition-colors"
+            onClick={handleExport}
+            disabled={exporting}
+            className="rounded-md border border-border text-text text-sm px-3 py-2 hover:bg-surface transition-colors disabled:opacity-50"
           >
-            Export
+            {exporting ? 'Exporting…' : 'Export'}
           </button>
           {canManage && (
             <button
@@ -105,7 +119,7 @@ export default function Samples() {
         </div>
       </div>
 
-      {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+      {error && <p className="text-sm text-warning mb-4">{error}</p>}
 
       <div className="border border-border rounded-lg overflow-hidden">
         <table className="w-full text-sm">

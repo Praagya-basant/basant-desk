@@ -34,6 +34,7 @@ export default function PanelDrawer({
   const { profile } = useAuth()
   const canManage = isAdminOrDeptAdmin(profile, 'sales') || profile?.role === 'manager'
   const isAdmin = isAdminOrDeptAdmin(profile, 'sales')
+  const isMerchant = profile?.role === 'merchant'
 
   const [tab, setTab] = useState<Tab>('details')
   const [movements, setMovements] = useState<PanelMovement[]>([])
@@ -87,7 +88,7 @@ export default function PanelDrawer({
             <div className="flex items-center gap-2 mt-3 flex-wrap">
               <span className="text-xs px-2 py-0.5 rounded-full bg-surface-2 text-text-secondary">{panel.buyer?.name ?? '—'}</span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-surface-2 text-text-secondary">{panel.hall?.name ?? '—'}</span>
-              {panel.is_shared && <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">Shared</span>}
+              {panel.is_shared && <span className="text-xs px-2 py-0.5 rounded-full bg-info/10 text-info">Shared</span>}
               <StatusBadge status={panel.status} />
               <ValidityBadge expiryDate={panel.expiry_date} />
             </div>
@@ -109,7 +110,7 @@ export default function PanelDrawer({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+          {error && <p className="text-sm text-warning mb-3">{error}</p>}
 
           {tab === 'details' && (
             <div>
@@ -148,11 +149,11 @@ export default function PanelDrawer({
               {movements.length === 0 ? (
                 <p className="text-sm text-text-secondary">No movements yet.</p>
               ) : (
-                movements.map((m) => (
+                movements.map((m, i) => (
                   <div key={m.id} className="flex gap-3">
                     <div className="flex flex-col items-center pt-1">
-                      <span className={`w-2.5 h-2.5 rounded-full ${m.status === 'out' ? 'bg-amber-500' : 'bg-green-500'}`} />
-                      <span className="w-px flex-1 bg-border mt-1" />
+                      <span className={`w-2.5 h-2.5 rounded-full ${m.status === 'out' ? 'bg-warning' : 'bg-success'}`} />
+                      {i < movements.length - 1 && <span className="w-px flex-1 bg-border mt-1" />}
                     </div>
                     <div className="pb-4 flex-1 min-w-0">
                       <p className="text-sm font-medium text-text">{m.status === 'out' ? 'Issued' : 'Returned'}</p>
@@ -190,7 +191,7 @@ export default function PanelDrawer({
               {isAdmin ? 'Manage Validity' : 'Request Extension'}
             </button>
           )}
-          {panel.status === 'in_hall' && (
+          {panel.status === 'in_hall' && (canManage || isMerchant) && (
             <button onClick={() => setRaisingShift(true)} className="rounded-md border border-border text-text text-sm font-medium px-3 py-2 hover:bg-surface transition-colors">
               Raise Shift Request
             </button>

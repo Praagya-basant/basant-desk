@@ -1,9 +1,15 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { X } from 'lucide-react'
+import { useAuth } from '../../../contexts/AuthContext'
+import { isAdminOrDeptAdmin } from '../../../lib/access'
 import { createSample, fetchBuyers, fetchHalls, uploadImage } from '../../../lib/mcsp/db'
 import type { Buyer, Hall } from '../../../lib/mcsp/dbTypes'
 
+const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
+
 export default function AddSampleModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const { profile } = useAuth()
+  const isManagerOnly = profile?.role === 'manager' && !isAdminOrDeptAdmin(profile, 'sales')
   const [buyers, setBuyers] = useState<Buyer[]>([])
   const [halls, setHalls] = useState<Hall[]>([])
   const [buyerId, setBuyerId] = useState('')
@@ -22,6 +28,14 @@ export default function AddSampleModal({ onClose, onSaved }: { onClose: () => vo
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // A hall manager can only add samples into their own hall (RLS enforces it);
+  // lock the picker to that hall so the form can't build an insert that 403s.
+  const managerHall = useMemo(
+    () => (isManagerOnly ? halls.find((h) => norm(h.name) === norm(profile?.hall)) ?? null : null),
+    [isManagerOnly, halls, profile?.hall],
+  )
+  const hallOptions = isManagerOnly ? halls.filter((h) => h.id === managerHall?.id) : halls
+
   useEffect(() => {
     Promise.all([fetchBuyers(), fetchHalls()]).then(([b, h]) => {
       setBuyers(b)
@@ -30,6 +44,10 @@ export default function AddSampleModal({ onClose, onSaved }: { onClose: () => vo
       if (h.length === 1) setHallId(h[0].id)
     })
   }, [])
+
+  useEffect(() => {
+    if (managerHall) setHallId(managerHall.id)
+  }, [managerHall])
 
   function handleImage(file: File | null) {
     setImageFile(file)
@@ -99,15 +117,21 @@ export default function AddSampleModal({ onClose, onSaved }: { onClose: () => vo
               <select
                 value={hallId}
                 onChange={(e) => setHallId(e.target.value)}
-                className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors"
+                disabled={isManagerOnly}
+                className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors disabled:opacity-60"
               >
-                <option value="">Select…</option>
-                {halls.map((h) => (
+                {!isManagerOnly && <option value="">Select…</option>}
+                {hallOptions.map((h) => (
                   <option key={h.id} value={h.id}>
                     {h.name}
                   </option>
                 ))}
               </select>
+              {isManagerOnly && !managerHall && halls.length > 0 && (
+                <p className="text-xs text-warning mt-1.5">
+                  Your assigned hall name doesn’t match any hall — ask an admin to fix it.
+                </p>
+              )}
             </div>
           </div>
 
@@ -214,7 +238,7 @@ export default function AddSampleModal({ onClose, onSaved }: { onClose: () => vo
             {imagePreview && <img src={imagePreview} alt="" className="mt-2 w-24 h-24 object-cover rounded-md border border-border" />}
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-warning">{error}</p>}
 
           <div className="flex gap-2 pt-2">
             <button

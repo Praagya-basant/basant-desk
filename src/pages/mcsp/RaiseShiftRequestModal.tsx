@@ -90,7 +90,7 @@ export default function RaiseShiftRequestModal({
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-warning">{error}</p>}
 
           <div className="flex gap-2 pt-2">
             <button

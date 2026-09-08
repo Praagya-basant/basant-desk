@@ -23,6 +23,19 @@ export default function Panels() {
   const [search, setSearch] = useState('')
   const [adding, setAdding] = useState(false)
   const [selected, setSelected] = useState<PanelWithRelations | null>(null)
+  const [exporting, setExporting] = useState(false)
+
+  async function handleExport() {
+    setExporting(true)
+    setError(null)
+    try {
+      await exportPanelsToExcel(filtered)
+    } catch {
+      setError('Could not generate the Excel file. Try again.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   async function load() {
     setLoading(true)
@@ -61,8 +74,8 @@ export default function Panels() {
           <p className="text-sm text-text-secondary mt-0.5">Counter panels across every hall.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => exportPanelsToExcel(filtered)} className="rounded-md border border-border text-text text-sm px-3 py-2 hover:bg-surface transition-colors">
-            Export
+          <button onClick={handleExport} disabled={exporting} className="rounded-md border border-border text-text text-sm px-3 py-2 hover:bg-surface transition-colors disabled:opacity-50">
+            {exporting ? 'Exporting…' : 'Export'}
           </button>
           {canManage && (
             <button onClick={() => setAdding(true)} className="flex items-center gap-1.5 rounded-md bg-accent text-white text-sm font-medium px-3 py-2 hover:bg-accent-hover transition-colors">
@@ -101,7 +114,7 @@ export default function Panels() {
         </div>
       </div>
 
-      {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+      {error && <p className="text-sm text-warning mb-4">{error}</p>}
 
       <div className="border border-border rounded-lg overflow-hidden">
         <table className="w-full text-sm">

@@ -8,6 +8,8 @@ import Halls from './Halls'
 import McspUsers from './McspUsers'
 import ValidityRequestsQueue from './ValidityRequestsQueue'
 import ShiftRequestsQueue from './ShiftRequestsQueue'
+import RecallsQueue from './RecallsQueue'
+import RequireMcspReviewAccess from './RequireMcspReviewAccess'
 import McspNotificationBell from './McspNotificationBell'
 
 // MCSP now lives under Sales (department key 'sales') — mounted by
@@ -52,16 +54,24 @@ export default function McspModule() {
           <Route
             path="validity-requests"
             element={
-              <RequireAdminOrDeptAdmin departmentKey="sales">
+              <RequireMcspReviewAccess>
                 <ValidityRequestsQueue />
-              </RequireAdminOrDeptAdmin>
+              </RequireMcspReviewAccess>
             }
           />
           <Route
             path="shift-requests"
             element={
-              <RequireAdminOrDeptAdmin departmentKey="sales">
+              <RequireMcspReviewAccess>
                 <ShiftRequestsQueue />
+              </RequireMcspReviewAccess>
+            }
+          />
+          <Route
+            path="recalls"
+            element={
+              <RequireAdminOrDeptAdmin departmentKey="sales">
+                <RecallsQueue />
               </RequireAdminOrDeptAdmin>
             }
           />

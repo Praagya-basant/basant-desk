@@ -1,9 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { createUser } from '../../lib/admin/createUser'
 import { logActivity } from '../../lib/activityLog'
 import { useAuth } from '../../contexts/AuthContext'
+import { fetchHalls } from '../../lib/mcsp/db'
+import type { Hall } from '../../lib/mcsp/dbTypes'
 import type { Role, UserProfile } from '../../types'
 
 function generatePassword() {
@@ -35,25 +37,42 @@ export default function McspUserFormModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [createdNotice, setCreatedNotice] = useState<string | null>(null)
+  const [halls, setHalls] = useState<Hall[]>([])
+
+  useEffect(() => {
+    fetchHalls().then(setHalls).catch(() => {})
+  }, [])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
     setSaving(true)
 
-    const payload = {
+    const common = {
       full_name: fullName || null,
       email,
       role,
-      departments: ['sales'],
       hall: role === 'manager' ? hall.trim() || null : null,
       buyers: role === 'merchant' ? buyers.split(',').map((b) => b.trim()).filter(Boolean) : null,
-      department_admin_for: isDeptAdmin ? ['sales'] : [],
     }
+
+    // Only ever touch this user's SALES membership — never overwrite the
+    // departments / department_admin_for they hold in other modules (Purchase,
+    // Yaamya, …). Merge 'sales' in/out of whatever they already have.
+    const existingDepartments = user?.departments ?? []
+    const existingDeptAdmin = user?.department_admin_for ?? []
+    const mergedDepartments = existingDepartments.includes('sales')
+      ? existingDepartments
+      : [...existingDepartments, 'sales']
+    const mergedDeptAdmin = isDeptAdmin
+      ? existingDeptAdmin.includes('sales')
+        ? existingDeptAdmin
+        : [...existingDeptAdmin, 'sales']
+      : existingDeptAdmin.filter((d) => d !== 'sales')
 
     if (isNew) {
       try {
-        await createUser({ ...payload, password })
+        await createUser({ ...common, password, departments: ['sales'], department_admin_for: isDeptAdmin ? ['sales'] : [] })
         setSaving(false)
         setCreatedNotice(`Account created. Share this password with them so they can sign in: ${password}`)
       } catch (err) {
@@ -63,7 +82,10 @@ export default function McspUserFormModal({
       return
     }
 
-    const { error: updateError } = await supabase.from('users').update(payload).eq('id', user!.id)
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ ...common, departments: mergedDepartments, department_admin_for: mergedDeptAdmin })
+      .eq('id', user!.id)
     setSaving(false)
 
     if (updateError) {
@@ -75,7 +97,7 @@ export default function McspUserFormModal({
       await logActivity(currentProfile.id, 'sales', 'mcsp_user.updated', {
         target_user_id: user!.id,
         role,
-        department_admin_for: payload.department_admin_for,
+        department_admin_for: mergedDeptAdmin,
       })
     }
 
@@ -97,7 +119,7 @@ export default function McspUserFormModal({
             <p className="text-sm text-text">{createdNotice}</p>
             <button
               onClick={onSaved}
-              className="w-full rounded-md bg-text text-bg text-sm font-medium py-2 hover:opacity-90 transition-opacity"
+              className="w-full rounded-md bg-accent text-white text-sm font-medium py-2 hover:bg-accent-hover transition-colors"
             >
               Done
             </button>
@@ -167,13 +189,20 @@ export default function McspUserFormModal({
             {role === 'manager' && (
               <div>
                 <label className="block text-sm text-text-secondary mb-1.5">Hall</label>
-                <input
+                <select
                   value={hall}
                   onChange={(e) => setHall(e.target.value)}
-                  placeholder="e.g. Hall 5"
                   className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-text-secondary transition-colors"
-                />
-                <p className="text-xs text-text-secondary mt-1.5">Must match a hall name exactly (see MCSP &gt; Halls).</p>
+                >
+                  <option value="">Select…</option>
+                  {halls.map((h) => (
+                    <option key={h.id} value={h.name}>
+                      {h.name}
+                    </option>
+                  ))}
+                  {hall && !halls.some((h) => h.name === hall) && <option value={hall}>{hall} (unknown — fix)</option>}
+                </select>
+                <p className="text-xs text-text-secondary mt-1.5">Pick from existing halls (manage them in MCSP &gt; Halls).</p>
               </div>
             )}
 
@@ -204,7 +233,7 @@ export default function McspUserFormModal({
               manage other Sales/MCSP users.
             </p>
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-warning">{error}</p>}
 
             <div className="flex gap-2 pt-2">
               <button
@@ -217,7 +246,7 @@ export default function McspUserFormModal({
               <button
                 type="submit"
                 disabled={saving}
-                className="flex-1 rounded-md bg-text text-bg text-sm font-medium py-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+                className="flex-1 rounded-md bg-accent text-white text-sm font-medium py-2 hover:bg-accent-hover transition-colors disabled:opacity-50"
               >
                 {saving ? 'Saving…' : isNew ? 'Create user' : 'Save changes'}
               </button>

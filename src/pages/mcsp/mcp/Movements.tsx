@@ -7,6 +7,19 @@ export default function Movements() {
   const [movements, setMovements] = useState<PanelMovementWithRelations[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+
+  async function handleExport() {
+    setExporting(true)
+    setError(null)
+    try {
+      await exportPanelMovementsToExcel(movements)
+    } catch {
+      setError('Could not generate the Excel file. Try again.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   useEffect(() => {
     listPanelMovements()
@@ -22,12 +35,12 @@ export default function Movements() {
           <h1 className="text-lg font-medium text-text">Movements</h1>
           <p className="text-sm text-text-secondary mt-0.5">Full checkout / return / forward history.</p>
         </div>
-        <button onClick={() => exportPanelMovementsToExcel(movements)} className="rounded-md border border-border text-text text-sm px-3 py-2 hover:bg-surface transition-colors">
-          Export
+        <button onClick={handleExport} disabled={exporting} className="rounded-md border border-border text-text text-sm px-3 py-2 hover:bg-surface transition-colors disabled:opacity-50">
+          {exporting ? 'Exporting…' : 'Export'}
         </button>
       </div>
 
-      {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+      {error && <p className="text-sm text-warning mb-4">{error}</p>}
 
       <div className="border border-border rounded-lg overflow-hidden">
         <table className="w-full text-sm">
@@ -59,7 +72,7 @@ export default function Movements() {
                   <td className="px-4 py-2.5 text-text-secondary">{m.reason_other || m.reason}</td>
                   <td className="px-4 py-2.5 text-text-secondary">{new Date(m.picked_at).toLocaleString()}</td>
                   <td className="px-4 py-2.5">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${m.status === 'returned' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${m.status === 'returned' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
                       {m.status === 'returned' ? 'Returned' : 'Out'}
                     </span>
                   </td>

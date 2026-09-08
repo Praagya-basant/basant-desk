@@ -64,19 +64,19 @@ export default function McspUsers() {
         </div>
         <button
           onClick={() => setEditingUser(null)}
-          className="flex items-center gap-1.5 rounded-md bg-text text-bg text-sm font-medium px-3 py-2 hover:opacity-90 transition-opacity"
+          className="flex items-center gap-1.5 rounded-md bg-accent text-white text-sm font-medium px-3 py-2 hover:bg-accent-hover transition-colors"
         >
           <Plus size={15} strokeWidth={2} />
           Add user
         </button>
       </div>
 
-      {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+      {error && <p className="text-sm text-warning mb-4">{error}</p>}
 
       <div className="border border-border rounded-lg overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-surface border-b border-border text-left text-text-secondary">
+            <tr className="bg-surface-2 border-b border-border text-left text-text-secondary">
               <th className="font-medium px-4 py-2.5">Name</th>
               <th className="font-medium px-4 py-2.5">Email</th>
               <th className="font-medium px-4 py-2.5">Role</th>

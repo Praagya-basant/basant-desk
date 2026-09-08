@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../../contexts/AuthContext'
 import { isAdminOrDeptAdmin } from '../../../lib/access'
-import { fetchBuyers, listMovements, listPanels, listSamples } from '../../../lib/mcsp/db'
+import { fetchBuyers, listMovements, listPanels, listSamples, listShiftRequests } from '../../../lib/mcsp/db'
 import { getValidityStatus } from '../../../lib/mcsp/dbTypes'
-import type { MovementWithRelations, SampleWithRelations } from '../../../lib/mcsp/dbTypes'
+import type { MovementWithRelations, SampleWithRelations, ShiftRequestWithRelations } from '../../../lib/mcsp/dbTypes'
+
+const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
@@ -17,35 +19,67 @@ function StatCard({ label, value }: { label: string; value: number }) {
 export default function Dashboard() {
   const { profile } = useAuth()
   const isAdmin = isAdminOrDeptAdmin(profile, 'sales')
-  const isManager = profile?.role === 'manager'
+  const isManager = profile?.role === 'manager' && !isAdmin
   const isMerchant = profile?.role === 'merchant'
 
   const [samples, setSamples] = useState<SampleWithRelations[]>([])
   const [movements, setMovements] = useState<MovementWithRelations[]>([])
+  const [shiftRequests, setShiftRequests] = useState<ShiftRequestWithRelations[]>([])
   const [panelCount, setPanelCount] = useState(0)
   const [buyerCount, setBuyerCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  async function load() {
+    setLoading(true)
+    setError(null)
+    try {
+      const [s, m, p, b, sr] = await Promise.all([
+        listSamples(),
+        listMovements(),
+        listPanels(),
+        fetchBuyers(),
+        listShiftRequests().catch(() => [] as ShiftRequestWithRelations[]),
+      ])
+      setSamples(s)
+      setMovements(m)
+      setPanelCount(p.length)
+      setBuyerCount(b.length)
+      setShiftRequests(sr)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load dashboard data.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    Promise.all([listSamples(), listMovements(), listPanels(), fetchBuyers()])
-      .then(([s, m, p, b]) => {
-        setSamples(s)
-        setMovements(m)
-        setPanelCount(p.length)
-        setBuyerCount(b.length)
-      })
-      .finally(() => setLoading(false))
+    load()
   }, [])
 
   if (loading) return <p className="text-sm text-text-secondary">Loading…</p>
+  if (error) {
+    return (
+      <div className="border border-border rounded-lg p-6 text-sm">
+        <p className="text-warning font-medium">Failed to load dashboard data.</p>
+        <p className="text-text-secondary mt-1">{error}</p>
+        <button onClick={load} className="mt-3 rounded-md border border-border px-3 py-1.5 text-text hover:bg-surface transition-colors">
+          Retry
+        </button>
+      </div>
+    )
+  }
 
   const inHall = samples.filter((s) => s.status === 'in_hall').length
   const issued = samples.filter((s) => s.status === 'checked_out').length
   const expiringSoon = samples.filter((s) => getValidityStatus(s.expiry_date) === 'expiring_soon').length
   const recentMovements = movements.slice(0, 8)
 
-  const mySamples = isManager ? samples.filter((s) => s.hall?.name === profile?.hall) : samples
+  const mySamples = isManager ? samples.filter((s) => norm(s.hall?.name) === norm(profile?.hall)) : samples
   const myIssued = mySamples.filter((s) => s.status === 'checked_out')
+  const incoming = shiftRequests.filter(
+    (r) => r.status === 'pending' && norm(r.to_hall?.name) === norm(profile?.hall),
+  ).length
 
   const byHall = new Map<string, SampleWithRelations[]>()
   for (const s of samples) {
@@ -90,12 +124,12 @@ export default function Dashboard() {
         </>
       )}
 
-      {isManager && !isAdmin && (
+      {isManager && (
         <>
           <div className="grid grid-cols-4 gap-3 mb-8">
             <StatCard label="Total In Hall" value={mySamples.filter((s) => s.status === 'in_hall').length} />
             <StatCard label="Currently Issued" value={myIssued.length} />
-            <StatCard label="Incoming (shift requests)" value={0} />
+            <StatCard label="Incoming (shift requests)" value={incoming} />
             <StatCard label="Expiring Soon" value={mySamples.filter((s) => getValidityStatus(s.expiry_date) === 'expiring_soon').length} />
           </div>
 

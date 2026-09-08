@@ -27,13 +27,28 @@ export default function McspNotificationBell() {
     const { data } = await mcsp()
       .from('notifications')
       .select('id, title, message, is_read, created_at')
+      .eq('recipient_id', profile.id)
       .order('created_at', { ascending: false })
       .limit(20)
     setNotifications((data as McspNotification[]) ?? [])
   }
 
   useEffect(() => {
+    if (!profile?.id) return
     load()
+    // Live-update the bell when a new row lands for this user.
+    const channel = supabase
+      .channel(`mcsp-notifications-${profile.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'mcsp', table: 'notifications', filter: `recipient_id=eq.${profile.id}` },
+        () => load(),
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id])
 
   const unreadCount = notifications.filter((n) => !n.is_read).length

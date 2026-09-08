@@ -69,7 +69,9 @@ export function canAccessDepartment(
 ): boolean {
   if (!profile) return false
   if (isAdmin(profile) || isDepartmentAdmin(profile, departmentKey)) return true
-  if (profile.role === 'manager') {
+  // A manager or merchant assigned to a department can use its tools — their
+  // row-level scope (own hall / own buyers) is enforced by RLS, not here.
+  if (profile.role === 'manager' || profile.role === 'merchant') {
     return profile.departments?.includes(departmentKey) ?? false
   }
   return grantedDepartments(permissionKeys).has(departmentKey)
@@ -82,7 +84,8 @@ export function accessibleDepartments(profile: UserProfile | null, permissionKey
   return DEPARTMENTS.filter(
     (d) =>
       isDepartmentAdmin(profile, d.key) ||
-      (profile.role === 'manager' && (profile.departments?.includes(d.key) ?? false)) ||
+      ((profile.role === 'manager' || profile.role === 'merchant') &&
+        (profile.departments?.includes(d.key) ?? false)) ||
       granted.has(d.key),
   )
 }

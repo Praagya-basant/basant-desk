@@ -195,7 +195,7 @@ export default function IssueSampleModal({
             {photoPreview && <img src={photoPreview} alt="" className="mt-2 w-20 h-20 object-cover rounded-md border border-border" />}
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-warning">{error}</p>}
 
           <div className="flex gap-2 pt-2">
             <button

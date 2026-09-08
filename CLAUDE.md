@@ -78,8 +78,13 @@ Flexible — decided incrementally, not fixed upfront.
   see `docs/yaamya.md`
 - **Sales**: built — MCSP (both MCS/samples and MCP/panels) ported from the old standalone BASANT
   MCSP app (`mcsp.basant.info`); full workflow (issue/return/retire, validity management, hall
-  shift requests, per-role dashboards, Excel export, in-app notifications) lives at `/sales/mcsp`.
-  Old project not yet decommissioned. See `docs/mcsp.md`.
+  shift requests, recalls queue, per-role dashboards, Excel export, in-app notifications) lives at
+  `/sales/mcsp`. **Full audit + fix pass done 2026-09-08** (migrations `0014`–`0017`): the schema
+  had never been GRANTed to `authenticated`/`anon` so every request 403'd — fixed; merchants were
+  locked out of the department gate — fixed; hall managers can now raise/review validity + shift
+  requests for their own hall; notification bell is per-recipient with realtime; buyers/halls got
+  rename + guarded delete with unique names; role-differentiated MCP dashboard; design-system token
+  cleanup. See `docs/mcsp.md`. Old project not yet decommissioned.
 - **Production, HR, Admin**: not started
 
 ## Core Management (not a department)
@@ -95,5 +100,6 @@ minimal staff surface at `/my-tasks`. Full detail: `docs/core-management.md`.
 - Any parsing/extraction logic must be tested against real multi-item input before considered done — subtle boundary bugs (e.g. off-by-one lookup windows, false-positive pattern matches) only surface under real testing, not code review alone.
 - Yaamya Wood Inward CFT formula is `(L_ft × W_in × H_in × pieces) / 144` — NOT `/1728`. Do not "simplify" it (see `docs/yaamya.md`).
 - Every new table needs RLS enabled **at creation time**, not added later — an admin-allowlist table (`core.core_management_admins`) shipped without it and sat exposed to the anon/authenticated key until fixed (`supabase/migrations/0001_core_management_admins_rls.sql`). Run Supabase's security advisor against any new table before considering it done.
-- MCSP's `hall`/`buyers` scoping matches by **name**, not id (`core.users.hall`/`core.users.buyers` are plain text/text[], not FKs) — renaming a hall or buyer in `mcsp.halls`/`mcsp.buyers` silently breaks that match for any user still pointed at the old name. See `docs/mcsp.md`.
+- MCSP's `hall`/`buyers` scoping matches by **name**, not id (`core.users.hall`/`core.users.buyers` are plain text/text[], not FKs) — renaming a hall or buyer in `mcsp.halls`/`mcsp.buyers` silently breaks that match for any user still pointed at the old name. The `hall` match is now case/whitespace-insensitive (`mcsp.current_hall_id()`, migration `0016`) and buyer/hall names are unique, but a genuine rename still needs affected users re-saved. See `docs/mcsp.md`.
+- Exposing a new Postgres schema in the Supabase dashboard ("Exposed schemas") sets the PostgREST config but does **not** always run the `GRANT USAGE`/table grants — `mcsp` sat 403ing every request for days because of this (migration `0014`). After adding a schema, verify `has_schema_privilege('authenticated','<schema>','USAGE')` is true and that `information_schema.role_table_grants` has rows for it.
 - MCSP's Postgres schema is still named `mcsp`, but it lives under the **Sales** department now (not its own department) — every RLS policy/RPC checks `'sales'`, not `'mcsp'`. Don't assume the schema name tells you the department key for anything built after 2026-09-05.

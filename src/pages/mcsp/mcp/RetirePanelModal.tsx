@@ -50,7 +50,7 @@ export default function RetirePanelModal({
             <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors resize-none" />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-warning">{error}</p>}
 
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={onClose} className="flex-1 rounded-md border border-border text-text text-sm font-medium py-2 hover:bg-surface transition-colors">

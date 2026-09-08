@@ -10,13 +10,15 @@ import type {
   PanelMovementWithRelations,
   PanelWithRelations,
   RecallRequest,
+  RecallRequestWithRelations,
+  RequestItemRef,
   Sample,
   SampleComment,
   SampleWithRelations,
   ShiftRequest,
   ShiftRequestWithRelations,
   ValidityChange,
-  ValidityRequest,
+  ValidityRequestWithRelations,
 } from './dbTypes'
 
 const mcsp = () => supabase.schema('mcsp')
@@ -54,6 +56,21 @@ export async function createHall(hallNumber: number, name: string): Promise<Hall
 
 export async function deleteBuyer(buyerId: string): Promise<void> {
   const { error } = await mcsp().rpc('delete_buyer', { p_buyer_id: buyerId })
+  if (error) throw error
+}
+
+export async function updateBuyer(buyerId: string, name: string): Promise<void> {
+  const { error } = await mcsp().rpc('update_buyer', { p_buyer_id: buyerId, p_name: name })
+  if (error) throw error
+}
+
+export async function updateHall(hallId: string, hallNumber: number, name: string): Promise<void> {
+  const { error } = await mcsp().rpc('update_hall', { p_hall_id: hallId, p_hall_number: hallNumber, p_name: name })
+  if (error) throw error
+}
+
+export async function deleteHall(hallId: string): Promise<void> {
+  const { error } = await mcsp().rpc('delete_hall', { p_hall_id: hallId })
   if (error) throw error
 }
 
@@ -242,10 +259,19 @@ export async function deleteSample(sampleId: string): Promise<void> {
   if (error) throw error
 }
 
+const EXT_BY_TYPE: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/heic': 'heic',
+}
+
 export async function uploadImage(file: File): Promise<string> {
   // Storage isn't schema-scoped like .from()/.rpc() — always supabase.storage,
   // regardless of which Postgres schema mcsp() points .from()/.rpc() at.
-  const ext = file.name.split('.').pop()
+  const nameExt = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : ''
+  const ext = /^[a-z0-9]{2,5}$/.test(nameExt) ? nameExt : EXT_BY_TYPE[file.type] ?? 'jpg'
   const path = `${crypto.randomUUID()}.${ext}`
 
   const { error } = await supabase.storage.from('mcsp-images').upload(path, file, { cacheControl: '3600', upsert: false })
@@ -268,11 +294,15 @@ export async function setSampleImage(sampleId: string, imageUrl: string): Promis
 export async function listSampleComments(sampleId: string): Promise<SampleComment[]> {
   const { data, error } = await mcsp()
     .from('sample_comments')
-    .select('*, author:author_id(full_name, email)')
+    .select('*')
     .eq('sample_id', sampleId)
     .order('created_at', { ascending: true })
   if (error) throw error
-  return data as unknown as SampleComment[]
+  const rows = (data ?? []) as SampleComment[]
+  // Resolve author names with a plain core.users lookup rather than a
+  // cross-schema PostgREST embed (mcsp → core embeds are unreliable).
+  const names = await resolveUserNames(rows.map((r) => r.author_id))
+  return rows.map((r) => ({ ...r, author: names.has(r.author_id) ? { full_name: names.get(r.author_id)!, email: '' } : null }))
 }
 
 export async function addSampleComment(sampleId: string, authorId: string, comment: string): Promise<void> {
@@ -289,6 +319,46 @@ export async function listRecallRequests(sampleId: string): Promise<RecallReques
   const { data, error } = await mcsp().from('recall_requests').select('*').eq('sample_id', sampleId).order('created_at', { ascending: false })
   if (error) throw error
   return data as RecallRequest[]
+}
+
+/** Every recall in the system (RLS narrows to the caller's scope) joined to its
+ * sample + buyer/hall + requester name — what the Recalls review queue reads. */
+export async function listAllRecalls(): Promise<RecallRequestWithRelations[]> {
+  const { data, error } = await mcsp()
+    .from('recall_requests')
+    .select('*, sample:sample_id(bt_code, product_name, buyer:buyer_id(name), hall:hall_id(name))')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  const rows = (data ?? []) as unknown as RecallRequestWithRelations[]
+  const names = await resolveUserNames(rows.map((r) => r.requested_by))
+  return rows.map((r) => ({ ...r, requester: names.get(r.requested_by) ?? null }))
+}
+
+export async function updateRecallStatus(id: string, status: 'acknowledged' | 'resolved'): Promise<void> {
+  const { error } = await mcsp().from('recall_requests').update({ status }).eq('id', id)
+  if (error) throw error
+}
+
+export async function countOpenRecalls(): Promise<number> {
+  const { count, error } = await mcsp()
+    .from('recall_requests')
+    .select('id', { count: 'exact', head: true })
+    .neq('status', 'resolved')
+  if (error) throw error
+  return count ?? 0
+}
+
+/** Resolve a set of core.users ids to display names without a cross-schema
+ * PostgREST embed (those are brittle — see docs/mcsp.md issue notes). */
+export async function resolveUserNames(ids: (string | null | undefined)[]): Promise<Map<string, string>> {
+  const unique = [...new Set(ids.filter((x): x is string => !!x))]
+  const out = new Map<string, string>()
+  if (unique.length === 0) return out
+  const { data } = await supabase.from('users').select('id, full_name, email').in('id', unique)
+  for (const u of (data ?? []) as { id: string; full_name: string | null; email: string }[]) {
+    out.set(u.id, u.full_name || u.email)
+  }
+  return out
 }
 
 // ---------------------------------------------------------------------------
@@ -474,10 +544,44 @@ export async function raiseValidityRequest(params: {
   if (error) throw error
 }
 
-export async function listValidityRequests(): Promise<ValidityRequest[]> {
+/** Resolve a batch of polymorphic {item_type,item_id} refs to a display card
+ * (code / name / buyer / hall) so review queues can show WHAT is being decided. */
+export async function resolveItemRefs(
+  refs: { item_type: ItemType; item_id: string }[],
+): Promise<Map<string, RequestItemRef>> {
+  const out = new Map<string, RequestItemRef>()
+  const sampleIds = [...new Set(refs.filter((r) => r.item_type === 'sample').map((r) => r.item_id))]
+  const panelIds = [...new Set(refs.filter((r) => r.item_type === 'panel').map((r) => r.item_id))]
+  if (sampleIds.length) {
+    const { data } = await mcsp()
+      .from('samples')
+      .select('id, bt_code, product_name, buyer:buyer_id(name), hall:hall_id(name)')
+      .in('id', sampleIds)
+    for (const s of (data ?? []) as any[]) {
+      out.set(s.id, { code: s.bt_code, name: s.product_name, buyerName: s.buyer?.name ?? null, hallName: s.hall?.name ?? null })
+    }
+  }
+  if (panelIds.length) {
+    const { data } = await mcsp()
+      .from('panels')
+      .select('id, panel_code, panel_name, buyer:buyer_id(name), hall:hall_id(name)')
+      .in('id', panelIds)
+    for (const p of (data ?? []) as any[]) {
+      out.set(p.id, { code: p.panel_code ?? '—', name: p.panel_name, buyerName: p.buyer?.name ?? null, hallName: p.hall?.name ?? null })
+    }
+  }
+  return out
+}
+
+export async function listValidityRequests(): Promise<ValidityRequestWithRelations[]> {
   const { data, error } = await mcsp().from('validity_requests').select('*').order('created_at', { ascending: false })
   if (error) throw error
-  return data as ValidityRequest[]
+  const rows = (data ?? []) as ValidityRequestWithRelations[]
+  const [items, names] = await Promise.all([
+    resolveItemRefs(rows.map((r) => ({ item_type: r.item_type, item_id: r.item_id }))),
+    resolveUserNames(rows.map((r) => r.requested_by)),
+  ])
+  return rows.map((r) => ({ ...r, item: items.get(r.item_id) ?? null, requester: names.get(r.requested_by) ?? null }))
 }
 
 export async function reviewValidityRequest(requestId: string, approve: boolean, adminNote?: string): Promise<void> {
@@ -499,7 +603,12 @@ export async function listShiftRequests(): Promise<ShiftRequestWithRelations[]> 
     .select('*, from_hall:from_hall_id(name), to_hall:to_hall_id(name)')
     .order('created_at', { ascending: false })
   if (error) throw error
-  return data as unknown as ShiftRequestWithRelations[]
+  const rows = (data ?? []) as unknown as ShiftRequestWithRelations[]
+  const [items, names] = await Promise.all([
+    resolveItemRefs(rows.map((r) => ({ item_type: r.item_type, item_id: r.item_id }))),
+    resolveUserNames(rows.map((r) => r.requested_by)),
+  ])
+  return rows.map((r) => ({ ...r, item: items.get(r.item_id) ?? null, requester: names.get(r.requested_by) ?? null }))
 }
 
 export async function raiseShiftRequest(params: {

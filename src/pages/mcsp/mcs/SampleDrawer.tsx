@@ -137,7 +137,7 @@ export default function SampleDrawer({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+          {error && <p className="text-sm text-warning mb-3">{error}</p>}
 
           {tab === 'details' && (
             <div>
@@ -175,11 +175,11 @@ export default function SampleDrawer({
               {movements.length === 0 ? (
                 <p className="text-sm text-text-secondary">No movements yet.</p>
               ) : (
-                movements.map((m) => (
+                movements.map((m, i) => (
                   <div key={m.id} className="flex gap-3">
                     <div className="flex flex-col items-center pt-1">
-                      <span className={`w-2.5 h-2.5 rounded-full ${m.status === 'out' ? 'bg-amber-500' : 'bg-green-500'}`} />
-                      <span className="w-px flex-1 bg-border mt-1" />
+                      <span className={`w-2.5 h-2.5 rounded-full ${m.status === 'out' ? 'bg-warning' : 'bg-success'}`} />
+                      {i < movements.length - 1 && <span className="w-px flex-1 bg-border mt-1" />}
                     </div>
                     <div className="pb-4 flex-1 min-w-0">
                       <p className="text-sm font-medium text-text">{m.status === 'out' ? 'Issued' : 'Returned'}</p>

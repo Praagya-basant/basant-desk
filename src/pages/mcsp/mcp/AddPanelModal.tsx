@@ -1,9 +1,15 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { X } from 'lucide-react'
+import { useAuth } from '../../../contexts/AuthContext'
+import { isAdminOrDeptAdmin } from '../../../lib/access'
 import { createPanel, fetchBuyers, fetchHalls, uploadImage } from '../../../lib/mcsp/db'
 import type { Buyer, Hall } from '../../../lib/mcsp/dbTypes'
 
+const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
+
 export default function AddPanelModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const { profile } = useAuth()
+  const isManagerOnly = profile?.role === 'manager' && !isAdminOrDeptAdmin(profile, 'sales')
   const [buyers, setBuyers] = useState<Buyer[]>([])
   const [halls, setHalls] = useState<Hall[]>([])
   const [buyerId, setBuyerId] = useState('')
@@ -17,11 +23,19 @@ export default function AddPanelModal({ onClose, onSaved }: { onClose: () => voi
   const [collectionName, setCollectionName] = useState('')
   const [signedBy, setSignedBy] = useState('')
   const [signedDate, setSignedDate] = useState('')
+  const [validityMode, setValidityMode] = useState<'months' | 'date'>('months')
   const [validityMonths, setValidityMonths] = useState('')
+  const [expiryDate, setExpiryDate] = useState('')
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const managerHall = useMemo(
+    () => (isManagerOnly ? halls.find((h) => norm(h.name) === norm(profile?.hall)) ?? null : null),
+    [isManagerOnly, halls, profile?.hall],
+  )
+  const hallOptions = isManagerOnly ? halls.filter((h) => h.id === managerHall?.id) : halls
 
   useEffect(() => {
     Promise.all([fetchBuyers(), fetchHalls()]).then(([b, h]) => {
@@ -31,6 +45,10 @@ export default function AddPanelModal({ onClose, onSaved }: { onClose: () => voi
       if (h.length === 1) setHallId(h[0].id)
     })
   }, [])
+
+  useEffect(() => {
+    if (managerHall) setHallId(managerHall.id)
+  }, [managerHall])
 
   function handleImage(file: File | null) {
     setImageFile(file)
@@ -59,7 +77,8 @@ export default function AddPanelModal({ onClose, onSaved }: { onClose: () => voi
         collectionName: collectionName.trim() || undefined,
         signedBy: signedBy.trim() || undefined,
         signedDate: signedDate || undefined,
-        validityMonths: validityMonths ? Number(validityMonths) : undefined,
+        validityMonths: validityMode === 'months' && validityMonths ? Number(validityMonths) : undefined,
+        expiryDate: validityMode === 'date' && expiryDate ? expiryDate : undefined,
         imageUrl,
       })
       onSaved()
@@ -93,12 +112,15 @@ export default function AddPanelModal({ onClose, onSaved }: { onClose: () => voi
             </div>
             <div>
               <label className="block text-sm text-text-secondary mb-1.5">Hall</label>
-              <select value={hallId} onChange={(e) => setHallId(e.target.value)} className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors">
-                <option value="">Select…</option>
-                {halls.map((h) => (
+              <select value={hallId} onChange={(e) => setHallId(e.target.value)} disabled={isManagerOnly} className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors disabled:opacity-60">
+                {!isManagerOnly && <option value="">Select…</option>}
+                {hallOptions.map((h) => (
                   <option key={h.id} value={h.id}>{h.name}</option>
                 ))}
               </select>
+              {isManagerOnly && !managerHall && halls.length > 0 && (
+                <p className="text-xs text-warning mt-1.5">Your assigned hall name doesn’t match any hall — ask an admin to fix it.</p>
+              )}
             </div>
           </div>
 
@@ -145,15 +167,49 @@ export default function AddPanelModal({ onClose, onSaved }: { onClose: () => voi
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm text-text-secondary mb-1.5">Signed Date</label>
-              <input type="date" value={signedDate} onChange={(e) => setSignedDate(e.target.value)} className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors" />
+          <div>
+            <label className="block text-sm text-text-secondary mb-1.5">Signed Date</label>
+            <input type="date" value={signedDate} onChange={(e) => setSignedDate(e.target.value)} className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors" />
+          </div>
+
+          <div>
+            <label className="block text-sm text-text-secondary mb-2">Validity</label>
+            <div className="flex gap-1.5 mb-2">
+              <button
+                type="button"
+                onClick={() => setValidityMode('months')}
+                className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                  validityMode === 'months' ? 'bg-accent text-white border-accent' : 'border-border text-text-secondary'
+                }`}
+              >
+                Months
+              </button>
+              <button
+                type="button"
+                onClick={() => setValidityMode('date')}
+                className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                  validityMode === 'date' ? 'bg-accent text-white border-accent' : 'border-border text-text-secondary'
+                }`}
+              >
+                Expiry Date
+              </button>
             </div>
-            <div>
-              <label className="block text-sm text-text-secondary mb-1.5">Validity (months)</label>
-              <input type="number" value={validityMonths} onChange={(e) => setValidityMonths(e.target.value)} className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors" />
-            </div>
+            {validityMode === 'months' ? (
+              <input
+                type="number"
+                value={validityMonths}
+                onChange={(e) => setValidityMonths(e.target.value)}
+                placeholder="e.g. 12"
+                className="w-32 rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors"
+              />
+            ) : (
+              <input
+                type="date"
+                value={expiryDate}
+                onChange={(e) => setExpiryDate(e.target.value)}
+                className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent transition-colors"
+              />
+            )}
           </div>
 
           <div>
@@ -162,7 +218,7 @@ export default function AddPanelModal({ onClose, onSaved }: { onClose: () => voi
             {imagePreview && <img src={imagePreview} alt="" className="mt-2 w-24 h-24 object-cover rounded-md border border-border" />}
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-warning">{error}</p>}
 
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={onClose} className="flex-1 rounded-md border border-border text-text text-sm font-medium py-2 hover:bg-surface transition-colors">

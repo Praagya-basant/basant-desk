@@ -156,7 +156,7 @@ export default function IssuePanelModal({
             {photoPreview && <img src={photoPreview} alt="" className="mt-2 w-20 h-20 object-cover rounded-md border border-border" />}
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-warning">{error}</p>}
 
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={onClose} className="flex-1 rounded-md border border-border text-text text-sm font-medium py-2 hover:bg-surface transition-colors">

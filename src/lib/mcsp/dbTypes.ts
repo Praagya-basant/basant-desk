@@ -150,6 +150,16 @@ export interface RecallRequest {
   created_at: string
 }
 
+export interface RecallRequestWithRelations extends RecallRequest {
+  sample: {
+    bt_code: string
+    product_name: string
+    buyer: { name: string } | null
+    hall: { name: string } | null
+  } | null
+  requester?: string | null
+}
+
 export interface ShiftRequest {
   id: string
   item_type: ItemType
@@ -165,9 +175,19 @@ export interface ShiftRequest {
   created_at: string
 }
 
+/** A sample or panel identified for a review queue row. */
+export interface RequestItemRef {
+  code: string
+  name: string
+  buyerName: string | null
+  hallName: string | null
+}
+
 export interface ShiftRequestWithRelations extends ShiftRequest {
   from_hall?: { name: string } | null
   to_hall?: { name: string } | null
+  item?: RequestItemRef | null
+  requester?: string | null
 }
 
 export interface ValidityRequest {
@@ -183,6 +203,11 @@ export interface ValidityRequest {
   approved_at: string | null
   admin_note: string | null
   created_at: string
+}
+
+export interface ValidityRequestWithRelations extends ValidityRequest {
+  item?: RequestItemRef | null
+  requester?: string | null
 }
 
 export interface ValidityChange {
