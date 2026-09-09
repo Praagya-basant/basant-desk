@@ -79,12 +79,10 @@ export default function AccessUsersTab({
     ])
       .then(([usersRes, mods, rls, grants]) => {
         if (usersRes.error) throw usersRes.error
-        const list = (usersRes.data as ManagedUser[]) ?? []
-        setUsers(list)
+        setUsers((usersRes.data as ManagedUser[]) ?? [])
         setModules(mods)
         setRoles(rls)
         setRoleGrants(grants)
-        if (list.length) setSelectedId(list[0].id)
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Could not load access data.'))
       .finally(() => setLoading(false))
@@ -106,11 +104,32 @@ export default function AccessUsersTab({
     }
   }
 
+  // A department admin can only inspect / manage users in one of their
+  // departments who aren't global admins (effective_module_access enforces the
+  // same server-side). Done at render so it tracks the props once profile loads.
+  const scopedUsers = useMemo(
+    () =>
+      globalAdmin
+        ? users
+        : users.filter(
+            (u) =>
+              u.role !== 'admin' &&
+              [...(u.departments ?? []), ...(u.department_admin_for ?? [])].some((d) =>
+                adminDepartments.includes(d),
+              ),
+          ),
+    [users, globalAdmin, adminDepartments],
+  )
+
+  useEffect(() => {
+    if (!selectedId && scopedUsers.length) setSelectedId(scopedUsers[0].id)
+  }, [scopedUsers, selectedId])
+
   useEffect(() => {
     if (selectedId) loadUserAccess(selectedId)
   }, [selectedId])
 
-  const selectedUser = users.find((u) => u.id === selectedId)
+  const selectedUser = scopedUsers.find((u) => u.id === selectedId)
 
   const manageableModules = useMemo(
     () => modules.filter((m) => globalAdmin || adminDepartments.includes(m.department_key)),
@@ -124,7 +143,7 @@ export default function AccessUsersTab({
     [roles, globalAdmin, adminDepartments],
   )
 
-  const filteredUsers = users.filter((u) => {
+  const filteredUsers = scopedUsers.filter((u) => {
     const q = search.trim().toLowerCase()
     return !q || (u.full_name ?? '').toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
   })
