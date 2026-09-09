@@ -331,10 +331,13 @@ begin
     v_old := to_jsonb(old); v_new := to_jsonb(new);
   end if;
 
+  -- This function is SECURITY DEFINER and owned by the migration role, which
+  -- also owns core.access_change_log — so this insert runs as the table owner
+  -- and bypasses the log's RLS (which otherwise blocks all client inserts).
   insert into core.access_change_log(changed_by, target_user, change_type, scope, old_value, new_value)
   values (auth.uid(), v_target, v_type, v_scope, v_old, v_new);
 
-  return coalesce(new, old);
+  return null;  -- AFTER trigger — return value ignored
 end;
 $$;
 
