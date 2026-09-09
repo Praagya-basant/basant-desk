@@ -125,8 +125,8 @@ join (values
   ('sales.export_data',      'sales.mcp',                   'view')
 ) as mp(legacy_key, module_key, level) on mp.legacy_key = p.key
 on conflict (user_id, module_key)
-  do update set level = greatest(core.user_module_access.level, excluded.level),
-                note  = coalesce(core.user_module_access.note || ' + ', '') || excluded.note;
+  do update set level = greatest(user_module_access.level, excluded.level),
+                note  = coalesce(user_module_access.note || ' + ', '') || excluded.note;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 5. Verification gate — abort the whole migration if anyone loses access.
