@@ -1,15 +1,17 @@
 import type { UserProfile } from '../types'
 import { DEPARTMENTS } from '../config/departments'
+import { ACCESS_LEVELS, MODULES, type AccessLevel } from '../config/modules'
 
-// The one place that defines "what counts as admin" — every other check in
-// this module (and every guard/hook built on it) goes through here.
+export type { AccessLevel }
+
+// ── Role predicates — unchanged, still the authority on "what counts as admin" ──
+
 export function isAdmin(profile: UserProfile | null): boolean {
   return profile?.role === 'admin'
 }
 
-// department_admin_for grants full admin-equivalent power, but scoped to
-// just that one department (e.g. a Purchase department admin can manage
-// Purchase users/price grid/data without being a global admin).
+// department_admin_for grants full admin-equivalent power, scoped to one
+// department (resolution layer 2 — see docs/access-control.md).
 export function isDepartmentAdmin(profile: UserProfile | null, departmentKey: string): boolean {
   return profile?.department_admin_for?.includes(departmentKey) ?? false
 }
@@ -18,9 +20,7 @@ export function isAdminOrDeptAdmin(profile: UserProfile | null, departmentKey: s
   return isAdmin(profile) || isDepartmentAdmin(profile, departmentKey)
 }
 
-// What to show next to a user's name — distinguishes a true global Admin
-// from someone who's only admin-equivalent within specific department(s),
-// so the UI never implies broader access than the account actually has.
+// What to show next to a user's name.
 export function roleLabel(profile: UserProfile | null): string {
   if (!profile) return ''
   if (isAdmin(profile)) return 'Admin'
@@ -32,60 +32,51 @@ export function roleLabel(profile: UserProfile | null): string {
   return profile.role
 }
 
-// permissionKeys are stored as "department.feature" (e.g. "purchase.hc_extraction").
-function departmentOf(permissionKey: string): string {
-  return permissionKey.split('.')[0]
+// ── Module access ──
+//
+// `moduleAccess` is the map returned by core.my_module_access() (loaded once in
+// AuthContext). The server-side resolver already accounts for global admin,
+// department admin, roles, per-user overrides and department baselines — so on
+// the client we only ever read this map. Missing key ⇒ 'none'.
+
+export function meetsLevel(actual: AccessLevel, min: AccessLevel): boolean {
+  return ACCESS_LEVELS.indexOf(actual) >= ACCESS_LEVELS.indexOf(min)
 }
 
-function grantedDepartments(permissionKeys: Set<string>): Set<string> {
-  return new Set(Array.from(permissionKeys, departmentOf))
+export function moduleLevel(moduleAccess: Map<string, AccessLevel>, moduleKey: string): AccessLevel {
+  return moduleAccess.get(moduleKey) ?? 'none'
 }
 
-/**
- * The single access rule for the whole app:
- *   admin                          -> everything
- *   manager, in dept X             -> everything in dept X, no permission lookup needed
- *   department_admin_for X         -> everything in dept X, no permission lookup needed
- *   everyone else                  -> only what's explicitly granted in user_permissions
- */
-export function hasAccess(
-  profile: UserProfile | null,
-  permissionKeys: Set<string>,
-  permissionKey: string,
+export function canModule(
+  moduleAccess: Map<string, AccessLevel>,
+  moduleKey: string,
+  min: AccessLevel = 'view',
 ): boolean {
-  if (!profile) return false
-  const department = departmentOf(permissionKey)
-  if (isAdmin(profile) || isDepartmentAdmin(profile, department)) return true
-  if (profile.role === 'manager') {
-    return profile.departments?.includes(department) ?? false
-  }
-  return permissionKeys.has(permissionKey)
+  return meetsLevel(moduleLevel(moduleAccess, moduleKey), min)
 }
+
+// ── Department-level access (for the nav + RequireDepartment) ──
 
 export function canAccessDepartment(
   profile: UserProfile | null,
-  permissionKeys: Set<string>,
+  moduleAccess: Map<string, AccessLevel>,
   departmentKey: string,
 ): boolean {
   if (!profile) return false
   if (isAdmin(profile) || isDepartmentAdmin(profile, departmentKey)) return true
-  // A manager or merchant assigned to a department can use its tools — their
-  // row-level scope (own hall / own buyers) is enforced by RLS, not here.
-  if (profile.role === 'manager' || profile.role === 'merchant') {
-    return profile.departments?.includes(departmentKey) ?? false
-  }
-  return grantedDepartments(permissionKeys).has(departmentKey)
+  // Any module in the department the user can at least view.
+  return MODULES.some(
+    (m) => m.department === departmentKey && moduleLevel(moduleAccess, m.key) !== 'none',
+  )
 }
 
-export function accessibleDepartments(profile: UserProfile | null, permissionKeys: Set<string>) {
+export function accessibleDepartments(
+  profile: UserProfile | null,
+  moduleAccess: Map<string, AccessLevel>,
+) {
   if (!profile) return []
   if (isAdmin(profile)) return DEPARTMENTS
-  const granted = grantedDepartments(permissionKeys)
   return DEPARTMENTS.filter(
-    (d) =>
-      isDepartmentAdmin(profile, d.key) ||
-      ((profile.role === 'manager' || profile.role === 'merchant') &&
-        (profile.departments?.includes(d.key) ?? false)) ||
-      granted.has(d.key),
+    (d) => d.key !== 'admin' && canAccessDepartment(profile, moduleAccess, d.key),
   )
 }

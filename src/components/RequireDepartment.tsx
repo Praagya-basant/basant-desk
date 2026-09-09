@@ -11,11 +11,11 @@ export default function RequireDepartment({
   deptKey: string
   children: ReactNode
 }) {
-  const { profile, permissionKeys, loading } = useAuth()
+  const { profile, moduleAccess, loading } = useAuth()
 
   if (loading) return <FullScreenLoader />
 
-  if (!canAccessDepartment(profile, permissionKeys, deptKey)) {
+  if (!canAccessDepartment(profile, moduleAccess, deptKey)) {
     return <Navigate to="/" replace />
   }
 

@@ -2,12 +2,12 @@ import { Link } from 'react-router-dom'
 import { Gem, Grid3x3, Users } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { isAdminOrDeptAdmin } from '../../lib/access'
-import { useHasAccess } from '../../hooks/useHasAccess'
+import { useCan } from '../../hooks/useModuleAccess'
 
 export default function PurchaseHome() {
   const { profile } = useAuth()
   const canManage = isAdminOrDeptAdmin(profile, 'purchase')
-  const canUseHoneycomb = useHasAccess('purchase.hc_extraction')
+  const canUseHoneycomb = useCan('purchase.honeycomb', 'view')
 
   return (
     <div className="max-w-2xl">

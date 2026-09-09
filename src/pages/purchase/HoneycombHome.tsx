@@ -2,12 +2,14 @@ import { Link } from 'react-router-dom'
 import { FileSpreadsheet, History, SlidersHorizontal } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { isAdminOrDeptAdmin } from '../../lib/access'
-import { useHasAccess } from '../../hooks/useHasAccess'
+import { useCan } from '../../hooks/useModuleAccess'
 
 export default function HoneycombHome() {
   const { profile } = useAuth()
   const canManage = isAdminOrDeptAdmin(profile, 'purchase')
-  const canUseHCExtraction = useHasAccess('purchase.hc_extraction')
+  const canRunExtraction = useCan('purchase.honeycomb', 'edit')
+  const canViewHistory = useCan('purchase.honeycomb_history', 'view')
+  const canUseHCExtraction = canRunExtraction || canViewHistory
 
   return (
     <div className="max-w-2xl">
@@ -19,26 +21,26 @@ export default function HoneycombHome() {
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        {canUseHCExtraction && (
-          <>
-            <Link
-              to="/purchase/honeycomb/extraction"
-              className="border border-border rounded-lg p-4 hover:bg-surface transition-colors"
-            >
-              <FileSpreadsheet size={18} strokeWidth={1.75} className="text-text-secondary mb-3" />
-              <p className="text-sm font-medium text-text mb-0.5">HC Sheet Extraction</p>
-              <p className="text-xs text-text-secondary">Extract structured rows from honeycomb sheet product logs.</p>
-            </Link>
+        {canRunExtraction && (
+          <Link
+            to="/purchase/honeycomb/extraction"
+            className="border border-border rounded-lg p-4 hover:bg-surface transition-colors"
+          >
+            <FileSpreadsheet size={18} strokeWidth={1.75} className="text-text-secondary mb-3" />
+            <p className="text-sm font-medium text-text mb-0.5">HC Sheet Extraction</p>
+            <p className="text-xs text-text-secondary">Extract structured rows from honeycomb sheet product logs.</p>
+          </Link>
+        )}
 
-            <Link
-              to="/purchase/honeycomb/history"
-              className="border border-border rounded-lg p-4 hover:bg-surface transition-colors"
-            >
-              <History size={18} strokeWidth={1.75} className="text-text-secondary mb-3" />
-              <p className="text-sm font-medium text-text mb-0.5">History</p>
-              <p className="text-xs text-text-secondary">Past extractions and their edit history.</p>
-            </Link>
-          </>
+        {canViewHistory && (
+          <Link
+            to="/purchase/honeycomb/history"
+            className="border border-border rounded-lg p-4 hover:bg-surface transition-colors"
+          >
+            <History size={18} strokeWidth={1.75} className="text-text-secondary mb-3" />
+            <p className="text-sm font-medium text-text mb-0.5">History</p>
+            <p className="text-xs text-text-secondary">Past extractions and their edit history.</p>
+          </Link>
         )}
 
         {canManage && (
