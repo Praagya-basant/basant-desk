@@ -5,8 +5,8 @@ import { accessibleDepartments, roleLabel } from '../lib/access'
 import { useCoreManagementAdmin } from '../hooks/useCoreManagementAdmin'
 
 export default function Sidebar() {
-  const { profile, permissionKeys, signOut } = useAuth()
-  const departments = accessibleDepartments(profile, permissionKeys)
+  const { profile, moduleAccess, signOut } = useAuth()
+  const departments = accessibleDepartments(profile, moduleAccess)
   const { allowed: coreManagementAllowed } = useCoreManagementAdmin()
 
   return (

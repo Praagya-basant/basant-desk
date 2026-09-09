@@ -10,15 +10,18 @@
 -- 1. Compatibility shim — every existing purchase/yaamya/mcsp RLS policy calls
 --    core.has_department_permission(dept); it now answers from the new engine.
 --    Semantics preserved: "does this user have any view+ access in this dept".
+--    The parameter name MUST stay "dept" — ~17 live RLS policies depend on this
+--    function's signature and Postgres rejects a parameter rename via
+--    CREATE OR REPLACE while dependents exist.
 -- ─────────────────────────────────────────────────────────────────────────────
-create or replace function core.has_department_permission(p_dept text)
+create or replace function core.has_department_permission(dept text)
 returns boolean
 language sql stable security definer
 set search_path to 'core','pg_temp'
 as $$
   select exists (
     select 1 from core.modules m
-    where m.department_key = p_dept and m.is_active
+    where m.department_key = dept and m.is_active
       and core.module_access_level(auth.uid(), m.key) >= 'view'
   );
 $$;

@@ -3,8 +3,8 @@ import { accessibleDepartments } from '../lib/access'
 import { Navigate } from 'react-router-dom'
 
 export default function Welcome() {
-  const { profile, permissionKeys } = useAuth()
-  const departments = accessibleDepartments(profile, permissionKeys)
+  const { profile, moduleAccess } = useAuth()
+  const departments = accessibleDepartments(profile, moduleAccess)
 
   if (departments.length > 0) {
     return <Navigate to={departments[0].route} replace />
