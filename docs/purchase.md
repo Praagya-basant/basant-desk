@@ -26,6 +26,12 @@ Rate formula: `(L × 0.0254) × (W × 0.0254) × price_per_m2[supplier][thicknes
 ### Access
 - Yash Jain = department_admin_for `['purchase']` — full control within Purchase only
 - Praagya = global admin, sees everything
+- Governed by the platform access-control system (`docs/access-control.md`). Purchase modules:
+  `purchase.honeycomb` (Honeycomb Calculator), `purchase.honeycomb_history`,
+  `purchase.honeycomb_price_grid` (admin), `purchase.marble`, `purchase.users` (admin). Grant
+  access via **/admin/access-control** — roles ("Purchase Data Entry", "Purchase Viewer/Editor/
+  Approver") or per-user module overrides. `role='manager'` in `departments` still auto-gets
+  `edit` on the work modules; a plain member gets nothing until granted.
 
 ## Navigation restructure (in progress)
 Sidebar for Purchase specifically:

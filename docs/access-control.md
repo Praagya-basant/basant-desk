@@ -2,7 +2,9 @@
 
 **Every module in basant-desk, current and future, uses this system. Read this before touching any permission logic. Do not invent per-module permission checks — register the module in `core.modules` and gate on `core.module_access_level()`.**
 
-Built 2026-09-09 (migrations `0018`–`0019`). Replaces the flat `core.permissions` / `core.user_permissions` model, which is kept **frozen** (nothing reads it) and will be dropped in a later cleanup migration.
+Built 2026-09-09 (migrations `0018`–`0019` + branch `access-control-system`). Replaces the flat `core.permissions` / `core.user_permissions` model, which is kept **frozen** (nothing reads it) and will be dropped in a later cleanup migration.
+
+**Frontend entry points:** `AuthContext.moduleAccess` (a `Map<module_key, AccessLevel>` from `core.my_module_access()`), `useModuleAccess(key)` / `useCan(key, min)` hooks, `<RequireModule moduleKey min>` route guard, `src/config/modules.ts` (static mirror of `core.modules` for department grouping + routes), `src/lib/admin/accessControl.ts` (the admin-UI data layer).
 
 ---
 
@@ -94,9 +96,9 @@ Migration `0019` converted every `core.user_permissions` row into an equivalent 
 |---|---|---|
 | `purchase.honeycomb` | none / edit | custom purchase member (no legacy perm) → no access; purchase manager → full; custom with `purchase.hc_extraction` → migrated `edit` override |
 | `purchase.honeycomb_history` | none / edit | same as honeycomb |
-| `purchase.honeycomb_price_grid` | none / none | dept-admin-only (`RequireAdminOrDeptAdmin`) |
-| `purchase.marble` | none / edit | placeholder page, no real users |
-| `purchase.users` | none / none | dept-admin-only |
+| `purchase.honeycomb_price_grid` | none / none | dept-admin-only — route now `<RequireModule min="admin">` (an explicit per-user `admin` grant also gets in) |
+| `purchase.marble` | none / edit | placeholder page, no real users — route unguarded, gate it when built |
+| `purchase.users` | none / none | dept-admin-only — route now `<RequireModule min="admin">` |
 | `yaamya.wood_inward` | edit / edit | any Yaamya `departments[]` member can enter rows today |
 | `yaamya.inward_log` | none / none | `role='admin' OR yaamya dept-admin` only |
 | `sales.mcs` / `sales.mcp` | view / edit | merchant/manager sales member sees the lists (RLS row-scopes); managers get the manage actions; custom with any legacy `sales.*` → migrated `view` override |
@@ -153,9 +155,10 @@ No publish step, no deploy — all changes are immediate DB writes.
      and r.name in ('Viewer','Editor','Approver');
    ```
    (If `production` has no system roles yet, seed `Viewer`/`Editor`/`Approver` for it first — same shape as migration `0019`.)
-3. **Add it to `src/config/modules.ts`** (icon + route mirror, like `departments.ts`).
-4. **Gate the route** with `<RequireModule moduleKey="production.qc" min="view">` and gate actions with `useCan('production.qc', 'edit'|'approve')`.
+3. **Add a row to `src/config/modules.ts`** (`key`, `department`, `label`, `route` — the static mirror, like `departments.ts`).
+4. **Gate the route** with `<RequireModule moduleKey="production.qc" min="view">` and gate actions/buttons with `useCan('production.qc', 'edit'|'approve')`. Admin-only surfaces (settings, user management) → `min="admin"`.
 5. **Write RLS** on the feature's tables using `core.module_access_level(auth.uid(), 'production.qc') >= '<level>'`. Do **not** copy the old `is_admin() OR is_department_admin() OR has_department_permission() OR departments @> …` boilerplate.
+6. The admin UI (`/admin/access-control`) picks the new module up automatically — no UI change needed.
 
 ---
 

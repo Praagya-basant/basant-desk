@@ -63,7 +63,19 @@ No separate `profiles` table (unlike the original app) — identity comes entire
 | `super_admin` (Sales-only admin) | `role='custom'`, `departments @> {sales}`, `department_admin_for @> {sales}` |
 | `hall_manager` | `role='manager'`, `departments @> {sales}`, `hall = '<hall name>'` — `core.users.hall` is a plain text field, matched **by name** against `mcsp.halls.name` (see `mcsp.current_hall_id()`) |
 | `merchant` | `role='merchant'`, `departments @> {sales}`, `buyers = {'<buyer name>', ...}` — `core.users.buyers` is already a text[] free-text field (pre-existing in the schema, wired into `UserFormModal`'s "Buyers (comma-separated)" field before this department existed), matched **by name** against `mcsp.buyers.name`. Natively supports multi-buyer merchants — no separate `merchant_buyers` join table needed. |
-| `custom` (fixed 6-toggle `custom_permissions` jsonb) | `role='custom'`, `departments @> {sales}`, plus fine-grained `core.permissions`/`core.user_permissions` rows (`sales.view_all_buyers`, `sales.manage_samples`, `sales.manage_panels`, `sales.view_movements`, `sales.manage_users`, `sales.export_data`) — checked via `core.has_department_permission('sales')` in RLS. |
+| `custom` (fine-grained) | `role='custom'`, `departments @> {sales}`, plus access-control roles / per-module overrides (see below) |
+
+**Access control (updated 2026-09-09).** MCSP now uses the platform access-control system
+(`docs/access-control.md`). Sales modules: `sales.mcs`, `sales.mcp` (member baseline `view`,
+manager `edit`), `sales.mcsp_validity` / `sales.mcsp_shift` (manager `edit`), `sales.mcsp_recalls`
+/ `sales.mcsp_buyers` / `sales.mcsp_halls` / `sales.mcsp_users` (admin only). The old
+`sales.*` permission keys were migrated to `view` on `sales.mcs`+`sales.mcp` and frozen;
+`core.has_department_permission('sales')` (still used throughout the mcsp RLS) is now a shim over
+the new engine — **no mcsp RLS policy changed**. Grant access via **/admin/access-control**
+(roles "MCSP Merchant", "MCSP Hall Manager", or per-user overrides). Row-scoping (own hall / own
+buyers) is still enforced by the `mcsp.*` RLS helpers on top of module-level access. The MCSP
+admin-surface routes (buyers/halls/users/recalls) still use `<RequireAdminOrDeptAdmin>` pending a
+later sweep to `<RequireModule min="admin">`.
 
 Because names (not ids) are the matching key for `hall`/`buyers`, **renaming a hall or buyer
 breaks the match** for any user pointed at the old name — re-save the affected users' `hall`/
