@@ -73,20 +73,17 @@ The admin UI reads one user's full resolved picture (with the winning source) vi
 
 ## Compatibility — nothing existing breaks
 
-`core.has_department_permission(dept)` — called by every current Purchase / Yaamya / MCSP RLS policy — was rewritten to answer from the new engine:
+`core.has_department_permission(dept)` — called by every current Purchase / Yaamya / MCSP RLS policy — was rewritten (migration `0020`) to answer from the new engine while keeping its **original narrow meaning**: "the user has an *explicitly assigned* grant in this department" — a per-user module override **or** a grant inherited from an assigned role. **Not** a department-membership baseline.
 
 ```sql
--- "does this user have any view+ access to any module in this department"
-select exists (
-  select 1 from core.modules m
-  where m.department_key = p_dept and m.is_active
-    and core.module_access_level(auth.uid(), m.key) >= 'view'
-);
+-- explicit grant only — override or assigned-role grant, ≥ view, in this dept
 ```
 
-**Zero existing RLS policies changed.** They keep calling the same helper, which now routes through `core.modules` / roles / overrides. `core.is_admin()` and `core.is_department_admin()` are untouched.
+This matters because MCSP RLS policies OR in `has_department_permission('sales')` as the "custom user with blanket read" branch *alongside* the hall/buyer row-scoping (`mcsp.is_hall_manager_of` / `mcsp.owns_buyer`). If the helper also returned true for a plain member, every sales manager/merchant would bypass row-scoping and see all halls/buyers. (Migration `0019` first shipped the broad version; `0020` fixed it.)
 
-Migration `0019` converted every `core.user_permissions` row into an equivalent `core.user_module_access` override and ran a **verification gate** — the migration aborts if any current user resolves lower than their legacy access. See the migration's closing `DO` block.
+**Zero existing RLS policies changed.** They keep calling the same helper. `core.is_admin()` and `core.is_department_admin()` are untouched.
+
+`user_permissions` was empty when migrated, so `has_department_permission` returns false for everyone today — exactly matching pre-`0018`. A custom user given the "MCSP Merchant" role (or a `sales.mcs` override) gets it back to true → blanket read, same as an old `sales.*` permission holder.
 
 ---
 
@@ -108,7 +105,7 @@ Migration `0019` converted every `core.user_permissions` row into an equivalent 
 
 Legacy `sales.*` permission keys (`view_all_buyers`, `manage_samples`, `manage_panels`, `view_movements`, `manage_users`, `export_data`) **all** migrated to `view` on `sales.mcs` + `sales.mcp` — because in practice that is exactly what they granted (department entry + blanket read; the MCSP UI never gated edit on these keys and MCSP write-RLS never used `has_department_permission`). Richer levels are assigned deliberately from the new admin UI.
 
-> **Note:** a Purchase/Yaamya *manager*'s RLS access is now guaranteed via the shim (they resolve `edit` on their department's work modules → `has_department_permission` returns true). If a department's RLS previously lacked a `departments @> array[dept]` clause, this is a small, intentional *fix* aligning backend with the frontend — no one loses access.
+> **Note:** managers / merchants / plain members get RLS access exactly as before — via the department-specific clauses in each policy (`mcsp.is_hall_manager_of`, `mcsp.owns_buyer`, `'yaamya' = ANY(departments)`, etc.), **not** via `has_department_permission` (which is now explicit-grant-only — see Compatibility above). A hall manager still sees only their hall; a merchant only their buyers.
 
 ---
 
