@@ -81,9 +81,14 @@ The migration adds `yaamya` to `pgrst.db_schemas` via `ALTER ROLE authenticator`
 overwrite that on the next save there. Confirm `yaamya` is listed in the dashboard.
 
 ## Access — assigning users
-No Yaamya users page was built. Assign access the same way as any department:
-- Yard workers: add `'yaamya'` to `core.users.departments`.
-- Yard managers: add `'yaamya'` to `core.users.department_admin_for`.
+Governed by the platform access-control system (`docs/access-control.md`). Modules:
+`yaamya.wood_inward` (member baseline `edit` — any `departments @> {yaamya}` member can enter rows,
+matching the original RLS) and `yaamya.inward_log` (admin only).
+- Yard workers: add `'yaamya'` to `core.users.departments` — they get `edit` on Wood Inward via
+  the member baseline. Or assign the "Yaamya Editor" role.
+- Yard managers: add `'yaamya'` to `core.users.department_admin_for` (global-admin action, via
+  **Admin → Users**) — full control including Inward Log.
+- Finer control (e.g. Wood Inward only, read-only) → **/admin/access-control** roles or overrides.
 Currently only Praagya (global admin) has access.
 
 ## Not ported / open

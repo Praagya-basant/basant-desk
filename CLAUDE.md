@@ -40,14 +40,35 @@ hall, buyers, created_at
 ```
 
 ## Access control model — applies to every module, every department
-Three tiers:
-1. **Global Admin** — `role = 'admin'`. Sees/controls everything.
-2. **Department Admin** — `department_admin_for` contains a department key. Full control (data, users, approvals) scoped ONLY to that department. Cannot see or touch other departments or the global Admin area.
-3. **Regular member** — `departments` contains the key. Can use tools, cannot manage/approve.
 
-Every "admin-only" check — in RLS policies AND frontend UI — must check `role = 'admin' OR department_key = ANY(department_admin_for)`, never `role = 'admin'` alone.
+**Centralized RBAC system, built 2026-09-09 (migrations `0018`–`0019`). Full spec + the
+mandatory rules for building any module: `docs/access-control.md` — read it before touching
+permissions. Every new feature registers a row in `core.modules` and gates on
+`core.module_access_level()` / `<RequireModule>` / `useCan()`. Do not invent per-module
+permission logic.**
 
-Known real example: Yash Jain (yashjain@basant.info) is department_admin_for `['purchase']`. Was previously miscreated as global `role='admin'` — fixed directly in Supabase. Frontend must show him a "Purchase Admin" badge, not "Admin", and must not show him the global /admin area.
+- **Modules** (`core.modules`): every page/feature, keyed `department.slug`. Access **levels**
+  `none < view < edit < approve < admin` (enum `core.access_level`).
+- **Roles** (`core.roles`): reusable named bundles of `(module, level)` grants — global, or scoped
+  to a department. `is_system_role` ones are seeded (Viewer/Editor/Approver per dept + a few named).
+- Resolution per `(user, module)`, first match wins: `role='admin'` → admin; dept in
+  `department_admin_for` → admin; per-user override (`core.user_module_access`, incl. `none`=deny)
+  → its level; highest assigned-role grant; department-member baseline (`manager_baseline` if
+  `role='manager'`, else `member_baseline`); else `none`.
+- `core.users.departments` / `.department_admin_for` are unchanged and still mean what they did —
+  this system layers on top. Legacy `core.permissions` / `core.user_permissions` are frozen (nothing
+  reads them; `core.has_department_permission()` is now a shim over the new engine so no existing
+  RLS changed) and get dropped in a later cleanup.
+- Every access change is auto-logged to `core.access_change_log`.
+
+**Admin UI**: `/admin/access-control` (Users / Roles / Audit Log tabs). Global admins see all;
+a **department admin can now enter `/admin`** — scoped to just this page, just their department(s).
+They cannot create global roles, edit system roles, touch other departments, or grant
+`department_admin_for` (that stays on the global-admin **Admin → Users** form).
+
+Known real example: Yash Jain (yashjain@basant.info) is department_admin_for `['purchase']`. Was
+previously miscreated as global `role='admin'` — fixed directly in Supabase. Frontend shows him a
+"Purchase Admin" badge, not "Admin", and his `/admin` area is only Access Control for Purchase.
 
 ## Departments (core.departments table)
 | key | label | notes |

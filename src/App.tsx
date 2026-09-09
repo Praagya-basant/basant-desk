@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import RequireAuth from './components/RequireAuth'
 import RequireDepartment from './components/RequireDepartment'
-import RequireAdmin from './components/RequireAdmin'
+import RequireAdminArea from './components/RequireAdminArea'
 import RequireCoreManagementAdmin from './components/RequireCoreManagementAdmin'
 import RequireStaffTaskAccess from './components/RequireStaffTaskAccess'
 import Layout from './components/Layout'
@@ -46,9 +46,9 @@ function App() {
                   key={dept.key}
                   path={`${dept.route}/*`}
                   element={
-                    <RequireAdmin>
+                    <RequireAdminArea>
                       <AdminModule />
-                    </RequireAdmin>
+                    </RequireAdminArea>
                   }
                 />
               ) : dept.key === 'purchase' ? (
