@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import { LogOut, ClipboardList, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { isAdmin, roleLabel } from '../lib/access'
@@ -47,7 +47,9 @@ export default function Sidebar() {
   return (
     <aside className="w-60 shrink-0 h-screen sticky top-0 border-r border-border bg-surface flex flex-col">
       <div className="px-5 py-5">
-        <span className="text-sm font-semibold tracking-tight text-text">BASANT Desk</span>
+        <Link to="/" className="text-sm font-semibold tracking-tight text-text hover:opacity-80 transition-opacity" title="Dashboard">
+          BASANT Desk
+        </Link>
       </div>
 
       <nav className="flex-1 px-3 overflow-y-auto">
