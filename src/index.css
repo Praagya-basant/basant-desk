@@ -5,9 +5,17 @@
 
   --color-bg: #ffffff;
   --color-surface: #f8f8f7;
+  --color-surface-2: #f1f1ef;
   --color-border: #e8e8e5;
   --color-text: #1a1a1a;
   --color-text-secondary: #6b6b6b;
+  --color-text-muted: #9b9b96;
+
+  --color-accent: #2563eb;
+  --color-accent-hover: #1d4ed8;
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-info: #2563eb;
 }
 
 @layer base {
@@ -29,5 +37,113 @@
 
   #root {
     min-height: 100vh;
+  }
+}
+
+/* Core Management print output. Every printable view renders TWO regions:
+   the interactive on-screen table (.cm-no-print — hidden only when printing)
+   and a plain read-only .cm-print-only PrintTable (hidden on screen, shown
+   only when printing) styled here to resemble the old sheet's actual
+   printed page — thin borders, tight rows, no form controls. Orientation is
+   set per-view at print time by exportUtils.printCurrentView(), which
+   rewrites the #cm-print-page-style tag's rule just before window.print(). */
+.cm-print-only {
+  display: none;
+}
+
+@media print {
+  .cm-no-print {
+    display: none !important;
+  }
+  .cm-print-only {
+    display: block;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .cm-print-page {
+    padding: 0;
+  }
+
+  .cm-print-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 10px;
+    color: #1a1a1a;
+  }
+
+  .cm-print-section {
+    break-inside: avoid;
+    margin-bottom: 14px;
+  }
+
+  .cm-print-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin: 0 0 4px;
+    color: #1a1a1a;
+  }
+
+  /* table-layout: fixed is required for the <colgroup> percentage widths
+     (set inline by PrintTable.tsx, from the same weights TaskTable uses
+     on screen) to actually be respected — without it the browser sizes
+     columns to fit content instead, which is what caused inconsistent
+     widths and the cramped date column before. */
+  .cm-print-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: 10px;
+    color: #1a1a1a;
+  }
+
+  .cm-print-table th,
+  .cm-print-table td {
+    border: 1px solid #9fb4e0;
+    padding: 3px 5px;
+    text-align: left;
+    vertical-align: top;
+    /* Wrap at spaces first; only break mid-word as a last resort for a
+       genuinely unbroken long string. The old single `word-break:
+       break-word` rule broke short multi-word headers like "1st Deadline"
+       mid-word whenever the column was narrow — this is the actual fix,
+       working together with the colgroup widths above. */
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  .cm-print-table th {
+    background: #dbe6fb;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 9px;
+    letter-spacing: 0.02em;
+    white-space: normal;
+  }
+
+  .cm-print-serial {
+    text-align: center !important;
+  }
+
+  .cm-print-right {
+    text-align: right !important;
+  }
+
+  .cm-print-center {
+    text-align: center !important;
+  }
+
+  /* Used by simpler (non-colgroup) print tables like Today's Points, whose
+     one free-text column should take most of the row's width. */
+  .cm-print-wide {
+    width: 55%;
+  }
+
+  .cm-print-table tr {
+    break-inside: avoid;
   }
 }

@@ -5,8 +5,9 @@
 -- Praagya + Amit" restriction.
 --
 -- Applied directly to the live basant-desk project (fwedvwhjscdrvgjsdzyk) on
--- 2026-09-05, ahead of this commit — this file documents/replays that fix,
--- it does not newly apply anything time-sensitive.
+-- 2026-09-05 and already committed to master (commit 1dd3186) — this file
+-- is carried onto mcsp-migration too so this branch's migration history
+-- stays complete and in order; it does not newly apply anything.
 --
 -- Why this is safe to enable with only one narrow policy:
 -- every legitimate reader already goes through core.is_core_management_admin(),

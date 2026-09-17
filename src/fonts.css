@@ -1,0 +1,45 @@
+/* Custom Inter face declarations — Latin subset only (the only script this
+   UI ever renders), with font-display: optional instead of @fontsource's
+   default swap.
+
+   The ~2s "page loads, content visibly contracts then expands" glitch
+   (item 7) was a classic font-swap reflow: @fontsource/inter's CSS
+   registers font-display: swap, so the browser paints with the fallback
+   font in --font-sans (system-ui/Segoe UI/Roboto) immediately, then swaps
+   to Inter once its woff2 finishes downloading — and the fallback's glyph
+   metrics differ enough from Inter's that wrapped text and therefore
+   container sizes visibly change size on the swap. font-display: optional
+   makes the browser commit to one choice per page load: use Inter if it's
+   already available (typically true after the very first visit, since the
+   files are then browser-cached) or the fallback for the whole load if
+   not — never both, so there's nothing to visibly swap mid-render. */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: optional;
+  src:
+    url('@fontsource/inter/files/inter-latin-400-normal.woff2') format('woff2'),
+    url('@fontsource/inter/files/inter-latin-400-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: optional;
+  src:
+    url('@fontsource/inter/files/inter-latin-500-normal.woff2') format('woff2'),
+    url('@fontsource/inter/files/inter-latin-500-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: optional;
+  src:
+    url('@fontsource/inter/files/inter-latin-600-normal.woff2') format('woff2'),
+    url('@fontsource/inter/files/inter-latin-600-normal.woff') format('woff');
+}

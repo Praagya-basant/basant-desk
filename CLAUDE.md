@@ -10,6 +10,7 @@
 5. After any new Postgres schema, remind the user: Supabase → Settings → API → Exposed schemas (manual step, easy to forget, has caused outages).
 6. When a session makes a real decision or finishes a feature, update this file (or the relevant `docs/*.md` file) before ending the session.
 7. For deep detail on a specific department, read `docs/<department>.md`. Keep this file itself high-level — an index, not the full detail.
+8. **Design system is locked**: read `docs/design-system.md` before building or changing ANY UI. Applies platform-wide, every department, every module — not decided per-module. Do not introduce new colors, fonts, or component styles outside this file.
 
 ---
 
@@ -17,12 +18,17 @@
 - **Supabase project**: `basant-desk`, ref `fwedvwhjscdrvgjsdzyk`, region `ap-northeast-1`
 - **GitHub repo**: `Praagya-basant/basant-desk`
 - **Hosting**: Vercel, domain `desk.basant.info` (live)
-- **MCP/MCS** (`ztxqksvexjonqmfyjijf`) and **Yaamya Industries** (`xvgclfsikyndkpumbcvn`, paused) are separate, older Supabase projects — untouched, migrate later as a deliberate step, not now.
+- **MCP/MCS** (`ztxqksvexjonqmfyjijf`, currently paused) is MCSP's old standalone Supabase
+  project, live at `mcsp.basant.info` — untouched, migration in progress on branch
+  `mcsp-migration`, see `docs/mcsp.md`. **Yaamya Industries** (`xvgclfsikyndkpumbcvn`) is a
+  separate, older Supabase project — untouched, migrate later as a deliberate step, not now.
 
 ## Database pattern
 One Supabase project. Every department gets its own Postgres schema (not a new project, not `public`). New schemas must be manually added to Supabase → Settings → API → Exposed schemas — cannot be done via SQL.
 
-Current schemas: `core` (shared users/roles/departments, built), `purchase` (in progress).
+Current schemas: `core` (shared users/roles/departments, built), `purchase` (in progress),
+`core_management` (built), `yaamya` (in progress — `wood_measurements` table),
+`mcsp` (built — MCS + MCP both live, under the **Sales** department; see `docs/mcsp.md`).
 
 ## core.users format
 ```
@@ -48,10 +54,14 @@ Known real example: Yash Jain (yashjain@basant.info) is department_admin_for `['
 |---|---|---|
 | purchase | Purchase | building first — see docs/purchase.md |
 | production | Production | includes Quality Inspection, no separate dept |
-| sales | Sales | MCSP may fold in here later — not decided |
+| sales | Sales | MCSP (samples + panels) lives here — see docs/mcsp.md |
 | hr | HR | |
 | yaamya | Yaamya Industries | separate dept |
 | admin | Admin | control/settings area |
+
+Note: `core.departments` still has a stale `mcsp` row (sort_order 13) from MCSP's brief stint as
+its own department — harmless, unused for access-control purposes, not removed since Core
+Management's category tracker also reads this table.
 
 Flexible — decided incrementally, not fixed upfront.
 
@@ -64,11 +74,32 @@ Flexible — decided incrementally, not fixed upfront.
 
 ## Departments — build status
 - **Purchase**: in progress, see `docs/purchase.md` for full detail
-- **Production, Sales, HR, Yaamya, Admin**: not started
+- **Yaamya Industries**: in progress — Wood Inward module ported from the old standalone app,
+  see `docs/yaamya.md`
+- **Sales**: built — MCSP (both MCS/samples and MCP/panels) ported from the old standalone BASANT
+  MCSP app (`mcsp.basant.info`); full workflow (issue/return/retire, validity management, hall
+  shift requests, recalls queue, per-role dashboards, Excel export, in-app notifications) lives at
+  `/sales/mcsp`. **Full audit + fix pass done 2026-09-08** (migrations `0014`–`0017`): the schema
+  had never been GRANTed to `authenticated`/`anon` so every request 403'd — fixed; merchants were
+  locked out of the department gate — fixed; hall managers can now raise/review validity + shift
+  requests for their own hall; notification bell is per-recipient with realtime; buyers/halls got
+  rename + guarded delete with unique names; role-differentiated MCP dashboard; design-system token
+  cleanup. See `docs/mcsp.md`. Old project not yet decommissioned.
+- **Production, HR, Admin**: not started
+
+## Core Management (not a department)
+Internal task-tracking module, restricted to Praagya + Amit only (see `core.core_management_admins`
+allowlist + `core.is_core_management_admin()`). Deliberately outside the department switcher and
+`DEPARTMENTS` config — mounted directly in `src/App.tsx` at `/core-management`, plus a separate
+minimal staff surface at `/my-tasks`. Full detail: `docs/core-management.md`.
 
 ## Known gotchas
 - New Postgres schemas need manual exposure in Supabase dashboard — caused a real outage during `core` setup (blank page, 406 errors).
 - Postgres arrays (`departments text[]`) — verify frontend reads these correctly; caused a "no departments assigned" bug despite correct DB data.
 - Vercel MCP connector has had permission issues (403 on deployment creation/listing) — first deploy sometimes needs a manual git push or dashboard trigger.
 - Any parsing/extraction logic must be tested against real multi-item input before considered done — subtle boundary bugs (e.g. off-by-one lookup windows, false-positive pattern matches) only surface under real testing, not code review alone.
-- Every new table needs RLS enabled **at creation time**, not added later — an admin-allowlist table (`core.core_management_admins`) shipped without it and sat exposed to the anon/authenticated key until fixed in `supabase/migrations/0001_core_management_admins_rls.sql`. Run Supabase's security advisor against any new table before considering it done.
+- Yaamya Wood Inward CFT formula is `(L_ft × W_in × H_in × pieces) / 144` — NOT `/1728`. Do not "simplify" it (see `docs/yaamya.md`).
+- Every new table needs RLS enabled **at creation time**, not added later — an admin-allowlist table (`core.core_management_admins`) shipped without it and sat exposed to the anon/authenticated key until fixed (`supabase/migrations/0001_core_management_admins_rls.sql`). Run Supabase's security advisor against any new table before considering it done.
+- MCSP's `hall`/`buyers` scoping matches by **name**, not id (`core.users.hall`/`core.users.buyers` are plain text/text[], not FKs) — renaming a hall or buyer in `mcsp.halls`/`mcsp.buyers` silently breaks that match for any user still pointed at the old name. The `hall` match is now case/whitespace-insensitive (`mcsp.current_hall_id()`, migration `0016`) and buyer/hall names are unique, but a genuine rename still needs affected users re-saved. See `docs/mcsp.md`.
+- Exposing a new Postgres schema in the Supabase dashboard ("Exposed schemas") sets the PostgREST config but does **not** always run the `GRANT USAGE`/table grants — `mcsp` sat 403ing every request for days because of this (migration `0014`). After adding a schema, verify `has_schema_privilege('authenticated','<schema>','USAGE')` is true and that `information_schema.role_table_grants` has rows for it.
+- MCSP's Postgres schema is still named `mcsp`, but it lives under the **Sales** department now (not its own department) — every RLS policy/RPC checks `'sales'`, not `'mcsp'`. Don't assume the schema name tells you the department key for anything built after 2026-09-05.
