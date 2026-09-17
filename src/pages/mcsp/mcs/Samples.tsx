@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { ImageOff } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../contexts/AuthContext'
 import { isAdminOrDeptAdmin } from '../../../lib/access'
 import { listSamples } from '../../../lib/mcsp/db'
@@ -12,6 +13,7 @@ import SampleDrawer from './SampleDrawer'
 import { exportSamplesToExcel } from '../../../lib/mcsp/exportExcel'
 
 type FilterTab = 'all' | 'in_hall' | 'checked_out' | 'expiring_soon'
+const FILTER_TABS: FilterTab[] = ['all', 'in_hall', 'checked_out', 'expiring_soon']
 
 export default function Samples() {
   const { profile } = useAuth()
@@ -20,7 +22,17 @@ export default function Samples() {
   const [samples, setSamples] = useState<SampleWithRelations[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState<FilterTab>('all')
+  // Deep-linkable so a dashboard stat card can land here pre-filtered
+  // (?status=checked_out etc.) — see mcs/Dashboard.tsx.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedFilter = searchParams.get('status') as FilterTab | null
+  const [filter, setFilterState] = useState<FilterTab>(
+    requestedFilter && FILTER_TABS.includes(requestedFilter) ? requestedFilter : 'all',
+  )
+  function setFilter(next: FilterTab) {
+    setFilterState(next)
+    setSearchParams(next === 'all' ? {} : { status: next }, { replace: true })
+  }
   const [search, setSearch] = useState('')
   const [adding, setAdding] = useState(false)
   const [selected, setSelected] = useState<SampleWithRelations | null>(null)

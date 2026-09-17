@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../../contexts/AuthContext'
 import { isAdminOrDeptAdmin } from '../../../lib/access'
 import { fetchBuyers, listMovements, listPanels, listSamples, listShiftRequests } from '../../../lib/mcsp/db'
@@ -7,13 +8,27 @@ import type { MovementWithRelations, SampleWithRelations, ShiftRequestWithRelati
 
 const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
 
-function StatCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="border border-border rounded-lg p-4 bg-surface">
+// `to` makes the card a link — used to jump straight to the filtered list a
+// stat is counting (e.g. "Currently Issued" -> Samples with that status
+// pre-applied). Cards without a sensible destination stay plain.
+function StatCard({ label, value, to }: { label: string; value: number; to?: string }) {
+  const body = (
+    <>
       <p className="text-2xl font-semibold text-text">{value}</p>
       <p className="text-xs text-text-secondary mt-1">{label}</p>
-    </div>
+    </>
   )
+  if (to) {
+    return (
+      <Link
+        to={to}
+        className="block border border-border rounded-lg p-4 bg-surface hover:border-accent hover:bg-surface-2 transition-colors"
+      >
+        {body}
+      </Link>
+    )
+  }
+  return <div className="border border-border rounded-lg p-4 bg-surface">{body}</div>
 }
 
 export default function Dashboard() {
@@ -100,11 +115,11 @@ export default function Dashboard() {
       {isAdmin && (
         <>
           <div className="grid grid-cols-5 gap-3 mb-8">
-            <StatCard label="Total Samples" value={samples.length} />
-            <StatCard label="Total Panels" value={panelCount} />
-            <StatCard label="Total Buyers" value={buyerCount} />
-            <StatCard label="Currently Issued" value={issued} />
-            <StatCard label="Expiring Soon" value={expiringSoon} />
+            <StatCard label="Total Samples" value={samples.length} to="/sales/mcsp/mcs/samples" />
+            <StatCard label="Total Panels" value={panelCount} to="/sales/mcsp/mcp/panels" />
+            <StatCard label="Total Buyers" value={buyerCount} to="/sales/mcsp/buyers" />
+            <StatCard label="Currently Issued" value={issued} to="/sales/mcsp/mcs/samples?status=checked_out" />
+            <StatCard label="Expiring Soon" value={expiringSoon} to="/sales/mcsp/mcs/samples?status=expiring_soon" />
           </div>
 
           <div className="grid grid-cols-2 gap-6">
@@ -127,10 +142,18 @@ export default function Dashboard() {
       {isManager && (
         <>
           <div className="grid grid-cols-4 gap-3 mb-8">
-            <StatCard label="Total In Hall" value={mySamples.filter((s) => s.status === 'in_hall').length} />
-            <StatCard label="Currently Issued" value={myIssued.length} />
-            <StatCard label="Incoming (shift requests)" value={incoming} />
-            <StatCard label="Expiring Soon" value={mySamples.filter((s) => getValidityStatus(s.expiry_date) === 'expiring_soon').length} />
+            <StatCard
+              label="Total In Hall"
+              value={mySamples.filter((s) => s.status === 'in_hall').length}
+              to="/sales/mcsp/mcs/samples?status=in_hall"
+            />
+            <StatCard label="Currently Issued" value={myIssued.length} to="/sales/mcsp/mcs/samples?status=checked_out" />
+            <StatCard label="Incoming (shift requests)" value={incoming} to="/sales/mcsp/shift-requests" />
+            <StatCard
+              label="Expiring Soon"
+              value={mySamples.filter((s) => getValidityStatus(s.expiry_date) === 'expiring_soon').length}
+              to="/sales/mcsp/mcs/samples?status=expiring_soon"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-6">
@@ -157,10 +180,10 @@ export default function Dashboard() {
       {isMerchant && (
         <>
           <div className="grid grid-cols-4 gap-3 mb-8">
-            <StatCard label="Total Samples" value={samples.length} />
-            <StatCard label="In Hall" value={inHall} />
-            <StatCard label="Issued" value={issued} />
-            <StatCard label="Expiring Soon" value={expiringSoon} />
+            <StatCard label="Total Samples" value={samples.length} to="/sales/mcsp/mcs/samples" />
+            <StatCard label="In Hall" value={inHall} to="/sales/mcsp/mcs/samples?status=in_hall" />
+            <StatCard label="Issued" value={issued} to="/sales/mcsp/mcs/samples?status=checked_out" />
+            <StatCard label="Expiring Soon" value={expiringSoon} to="/sales/mcsp/mcs/samples?status=expiring_soon" />
           </div>
 
           <div className="grid grid-cols-2 gap-6">

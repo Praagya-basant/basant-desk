@@ -4,17 +4,13 @@ import { LayoutGrid, Package, ArrowLeftRight, Layers, Building2, Warehouse, User
 import { useAuth } from '../../contexts/AuthContext'
 import { isAdminOrDeptAdmin } from '../../lib/access'
 import { countOpenRecalls } from '../../lib/mcsp/db'
+import { navLinkClass } from './navLinkClass'
 
-const navItemClass = ({ isActive }: { isActive: boolean }) =>
-  `flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
-    isActive ? 'bg-bg text-text border border-border' : 'text-text-secondary hover:text-text'
-  }`
-
-/** MCSP's own module switcher + nav — MCS (samples) / MCP (panels) pill
- * tabs at top, matching what the standalone BASANT MCSP app used, styled
- * with the exact same tokens as the platform's main Sidebar/PurchaseModule
- * tab pattern (bg-surface/bg-bg/border-border) rather than any new pattern. */
-export default function McspSidebar() {
+/** MCSP's contextual nav — MCS (samples) / MCP (panels) pill switcher, plus
+ * the current area's pages, plus a Manage/Review section. This is the ONE
+ * sidebar's content while inside /sales/mcsp/* — there is no second sidebar
+ * rendered alongside it (see McspModule.tsx). */
+export default function McspNav() {
   const { profile } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
@@ -34,7 +30,7 @@ export default function McspSidebar() {
       : null
 
   return (
-    <aside className="w-52 shrink-0">
+    <div>
       <div className="flex rounded-md bg-surface border border-border p-1 mb-4">
         <button
           onClick={() => navigate('/sales/mcsp/mcs')}
@@ -58,31 +54,31 @@ export default function McspSidebar() {
         <nav className="space-y-0.5">
           {activeArea === 'mcs' ? (
             <>
-              <NavLink to="/sales/mcsp/mcs" end className={navItemClass}>
-                <LayoutGrid size={15} strokeWidth={1.75} />
+              <NavLink to="/sales/mcsp/mcs" end className={navLinkClass}>
+                <LayoutGrid size={16} strokeWidth={1.75} />
                 Dashboard
               </NavLink>
-              <NavLink to="/sales/mcsp/mcs/samples" className={navItemClass}>
-                <Package size={15} strokeWidth={1.75} />
+              <NavLink to="/sales/mcsp/mcs/samples" className={navLinkClass}>
+                <Package size={16} strokeWidth={1.75} />
                 Samples
               </NavLink>
-              <NavLink to="/sales/mcsp/mcs/movements" className={navItemClass}>
-                <ArrowLeftRight size={15} strokeWidth={1.75} />
+              <NavLink to="/sales/mcsp/mcs/movements" className={navLinkClass}>
+                <ArrowLeftRight size={16} strokeWidth={1.75} />
                 Movements
               </NavLink>
             </>
           ) : (
             <>
-              <NavLink to="/sales/mcsp/mcp" end className={navItemClass}>
-                <LayoutGrid size={15} strokeWidth={1.75} />
+              <NavLink to="/sales/mcsp/mcp" end className={navLinkClass}>
+                <LayoutGrid size={16} strokeWidth={1.75} />
                 Dashboard
               </NavLink>
-              <NavLink to="/sales/mcsp/mcp/panels" className={navItemClass}>
-                <Layers size={15} strokeWidth={1.75} />
+              <NavLink to="/sales/mcsp/mcp/panels" className={navLinkClass}>
+                <Layers size={16} strokeWidth={1.75} />
                 Panels
               </NavLink>
-              <NavLink to="/sales/mcsp/mcp/movements" className={navItemClass}>
-                <ArrowLeftRight size={15} strokeWidth={1.75} />
+              <NavLink to="/sales/mcsp/mcp/movements" className={navLinkClass}>
+                <ArrowLeftRight size={16} strokeWidth={1.75} />
                 Movements
               </NavLink>
             </>
@@ -98,31 +94,31 @@ export default function McspSidebar() {
           <nav className="space-y-0.5">
             {isSalesAdmin && (
               <>
-                <NavLink to="/sales/mcsp/buyers" className={navItemClass}>
-                  <Building2 size={15} strokeWidth={1.75} />
+                <NavLink to="/sales/mcsp/buyers" className={navLinkClass}>
+                  <Building2 size={16} strokeWidth={1.75} />
                   Buyers
                 </NavLink>
-                <NavLink to="/sales/mcsp/halls" className={navItemClass}>
-                  <Warehouse size={15} strokeWidth={1.75} />
+                <NavLink to="/sales/mcsp/halls" className={navLinkClass}>
+                  <Warehouse size={16} strokeWidth={1.75} />
                   Halls
                 </NavLink>
-                <NavLink to="/sales/mcsp/users" className={navItemClass}>
-                  <Users size={15} strokeWidth={1.75} />
+                <NavLink to="/sales/mcsp/users" className={navLinkClass}>
+                  <Users size={16} strokeWidth={1.75} />
                   Users
                 </NavLink>
               </>
             )}
-            <NavLink to="/sales/mcsp/validity-requests" className={navItemClass}>
-              <CalendarClock size={15} strokeWidth={1.75} />
+            <NavLink to="/sales/mcsp/validity-requests" className={navLinkClass}>
+              <CalendarClock size={16} strokeWidth={1.75} />
               Validity Requests
             </NavLink>
-            <NavLink to="/sales/mcsp/shift-requests" className={navItemClass}>
-              <MoveRight size={15} strokeWidth={1.75} />
+            <NavLink to="/sales/mcsp/shift-requests" className={navLinkClass}>
+              <MoveRight size={16} strokeWidth={1.75} />
               Shift Requests
             </NavLink>
             {isSalesAdmin && (
-              <NavLink to="/sales/mcsp/recalls" className={navItemClass}>
-                <Undo2 size={15} strokeWidth={1.75} />
+              <NavLink to="/sales/mcsp/recalls" className={navLinkClass}>
+                <Undo2 size={16} strokeWidth={1.75} />
                 <span className="flex-1">Recalls</span>
                 {openRecalls > 0 && (
                   <span className="flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-accent text-white text-[10px] font-medium">
@@ -134,6 +130,6 @@ export default function McspSidebar() {
           </nav>
         </>
       )}
-    </aside>
+    </div>
   )
 }

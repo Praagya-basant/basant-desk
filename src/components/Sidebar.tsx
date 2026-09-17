@@ -1,12 +1,44 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { LogOut, ClipboardList, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { accessibleDepartments, isAdmin, roleLabel } from '../lib/access'
+import { isAdmin, roleLabel } from '../lib/access'
+import { getDepartment } from '../config/departments'
 import { useCoreManagementAdmin } from '../hooks/useCoreManagementAdmin'
+import DepartmentNav from './sidebar/DepartmentNav'
+import SalesNav from './sidebar/SalesNav'
+import McspNav from './sidebar/McspNav'
+import PurchaseNav from './sidebar/PurchaseNav'
+import YaamyaNav from './sidebar/YaamyaNav'
+
+/**
+ * ONE sidebar, whole app. Its content swaps by route — department list on the
+ * main dashboard, that department's modules once inside it, and a module's own
+ * nav (e.g. MCS/MCP) once inside that. No second sidebar is ever rendered
+ * alongside content — going back up a level is the breadcrumb in Layout.tsx,
+ * not a nested nav panel. See docs/design-system.md navigation shell.
+ */
+function SidebarContent() {
+  const location = useLocation()
+  const dept = getDepartment(location.pathname.replace(/^\//, '').split('/')[0])
+
+  if (!dept) return <DepartmentNav />
+
+  switch (dept.key) {
+    case 'sales':
+      return location.pathname.startsWith('/sales/mcsp') ? <McspNav /> : <SalesNav />
+    case 'purchase':
+      return <PurchaseNav />
+    case 'yaamya':
+      return <YaamyaNav />
+    default:
+      // production, hr, admin — nothing built yet; department list is still
+      // a meaningful "where am I" view rather than an empty panel.
+      return <DepartmentNav />
+  }
+}
 
 export default function Sidebar() {
-  const { profile, moduleAccess, signOut } = useAuth()
-  const departments = accessibleDepartments(profile, moduleAccess)
+  const { profile, signOut } = useAuth()
   const { allowed: coreManagementAllowed } = useCoreManagementAdmin()
   // Global admins reach Access Control via the "Admin" department link; a
   // department admin gets a direct link (their /admin area is just this page).
@@ -18,23 +50,8 @@ export default function Sidebar() {
         <span className="text-sm font-semibold tracking-tight text-text">BASANT Desk</span>
       </div>
 
-      <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
-        {departments.map((dept) => (
-          <NavLink
-            key={dept.key}
-            to={dept.route}
-            className={({ isActive }) =>
-              `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
-                isActive
-                  ? 'bg-bg text-text border border-border'
-                  : 'text-text-secondary hover:text-text'
-              }`
-            }
-          >
-            <dept.icon size={16} strokeWidth={1.75} />
-            {dept.label}
-          </NavLink>
-        ))}
+      <nav className="flex-1 px-3 overflow-y-auto">
+        <SidebarContent />
       </nav>
 
       {(showAccessControlLink || coreManagementAllowed) && (

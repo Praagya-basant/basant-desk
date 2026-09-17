@@ -86,12 +86,25 @@ Management's category tracker also reads this table.
 
 Flexible — decided incrementally, not fixed upfront.
 
-## Navigation shell (platform-wide)
-- Dashboard landing page (`/`) — department cards, no sidebar, only departments the user has access to
-- Inside a department: sidebar with department switcher at top + grouped module sections below
-- Notion-style tabs at top of content area — multiple pages open at once, each keeps own state, persisted in sessionStorage
-- Shared/reusable shell components across all departments via config, not hardcoded per department
-- Status: spec written, build in progress
+## Navigation shell (platform-wide) — built 2026-09-17
+
+**One sidebar, whole app — never a second one.** `src/components/Sidebar.tsx` swaps its content by
+route: the department switcher at `/`, that department's own modules once inside it, and a
+module's own nav (e.g. MCS/MCP) once inside that — each in `src/components/sidebar/*Nav.tsx`
+(`DepartmentNav`, `SalesNav`, `McspNav`, `PurchaseNav`, `YaamyaNav`; departments with nothing built
+yet fall back to `DepartmentNav`). Going back up a level is the **breadcrumb** at the top of the
+content area (`Layout.tsx`, driven by `src/config/subModules.ts` → `getBreadcrumbTrail()`), not a
+nested nav panel — Dashboard icon → department → every registered level, each a link except the
+current one. Register a new sub-page's breadcrumb entry in `subModules.ts` when you build it.
+
+MCSP's MCS/MCP pill switch keeps both areas mounted (`McspModule.tsx` gives each its own frozen
+`<Routes location=...>`, shown/hidden via CSS) instead of unmounting/refetching on every switch —
+no reload flash, filters/scroll survive a round trip. Same pattern to reach for anywhere else a
+top-level tab switch feels like a page reload.
+
+- Shared/reusable shell components across all departments via config, not hardcoded per department.
+- Notion-style tabs (multiple pages open at once, each keeps its own state, persisted in
+  sessionStorage) — **not built yet**, separate from the sidebar/breadcrumb work above.
 
 ## Departments — build status
 - **Purchase**: in progress, see `docs/purchase.md` for full detail
@@ -105,7 +118,11 @@ Flexible — decided incrementally, not fixed upfront.
   locked out of the department gate — fixed; hall managers can now raise/review validity + shift
   requests for their own hall; notification bell is per-recipient with realtime; buyers/halls got
   rename + guarded delete with unique names; role-differentiated MCP dashboard; design-system token
-  cleanup. See `docs/mcsp.md`. Old project not yet decommissioned.
+  cleanup. **2026-09-17**: merged into `master` along with the platform access-control system
+  (migrations `0018`–`0020` — see "Access control model" above); MCS/MCP switch no longer
+  unmounts/refetches (see Navigation shell); MCS dashboard stat cards are now links straight into
+  Samples pre-filtered by that status (`?status=`); moved onto the single context-aware sidebar,
+  its old standalone `McspSidebar` removed. See `docs/mcsp.md`. Old project not yet decommissioned.
 - **Production, HR, Admin**: not started
 
 ## Core Management (not a department)
@@ -123,4 +140,5 @@ minimal staff surface at `/my-tasks`. Full detail: `docs/core-management.md`.
 - Every new table needs RLS enabled **at creation time**, not added later — an admin-allowlist table (`core.core_management_admins`) shipped without it and sat exposed to the anon/authenticated key until fixed (`supabase/migrations/0001_core_management_admins_rls.sql`). Run Supabase's security advisor against any new table before considering it done.
 - MCSP's `hall`/`buyers` scoping matches by **name**, not id (`core.users.hall`/`core.users.buyers` are plain text/text[], not FKs) — renaming a hall or buyer in `mcsp.halls`/`mcsp.buyers` silently breaks that match for any user still pointed at the old name. The `hall` match is now case/whitespace-insensitive (`mcsp.current_hall_id()`, migration `0016`) and buyer/hall names are unique, but a genuine rename still needs affected users re-saved. See `docs/mcsp.md`.
 - Exposing a new Postgres schema in the Supabase dashboard ("Exposed schemas") sets the PostgREST config but does **not** always run the `GRANT USAGE`/table grants — `mcsp` sat 403ing every request for days because of this (migration `0014`). After adding a schema, verify `has_schema_privilege('authenticated','<schema>','USAGE')` is true and that `information_schema.role_table_grants` has rows for it.
+- **⚠️ Migration `0020` (`supabase/migrations/0020_access_control_narrow_has_department_permission.sql`) may not be applied yet — check before trusting MCSP row-scoping.** `0019` accidentally made `core.has_department_permission(dept)` return true for anyone with a plain department-membership baseline, not just an explicit grant — which let every Sales manager/merchant bypass `mcsp.is_hall_manager_of` / `mcsp.owns_buyer` and see every hall's/buyer's samples. `0020` fixes it. Verify with a live user before assuming this is safe: a hall manager should see only their hall's samples, a merchant only their buyers'.
 - MCSP's Postgres schema is still named `mcsp`, but it lives under the **Sales** department now (not its own department) — every RLS policy/RPC checks `'sales'`, not `'mcsp'`. Don't assume the schema name tells you the department key for anything built after 2026-09-05.
