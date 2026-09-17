@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, ImageOff } from 'lucide-react'
+import { Plus, Upload, ImageOff } from 'lucide-react'
 import { useAuth } from '../../../contexts/AuthContext'
 import { isAdminOrDeptAdmin } from '../../../lib/access'
 import { listPanels } from '../../../lib/mcsp/db'
@@ -8,6 +8,7 @@ import type { PanelWithRelations } from '../../../lib/mcsp/dbTypes'
 import { StatusBadge, ValidityBadge } from '../Badges'
 import AddPanelModal from './AddPanelModal'
 import PanelDrawer from './PanelDrawer'
+import UploadExcelModal from '../UploadExcelModal'
 import { exportPanelsToExcel } from '../../../lib/mcsp/exportExcel'
 
 type FilterTab = 'all' | 'in_hall' | 'issued' | 'expiring_soon' | 'retired'
@@ -22,6 +23,7 @@ export default function Panels() {
   const [filter, setFilter] = useState<FilterTab>('all')
   const [search, setSearch] = useState('')
   const [adding, setAdding] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [selected, setSelected] = useState<PanelWithRelations | null>(null)
   const [exporting, setExporting] = useState(false)
 
@@ -77,6 +79,12 @@ export default function Panels() {
           <button onClick={handleExport} disabled={exporting} className="rounded-md border border-border text-text text-sm px-3 py-2 hover:bg-surface transition-colors disabled:opacity-50">
             {exporting ? 'Exporting…' : 'Export'}
           </button>
+          {canManage && (
+            <button onClick={() => setUploading(true)} className="flex items-center gap-1.5 rounded-md border border-border text-text text-sm px-3 py-2 hover:bg-surface transition-colors">
+              <Upload size={15} strokeWidth={2} />
+              Upload Excel
+            </button>
+          )}
           {canManage && (
             <button onClick={() => setAdding(true)} className="flex items-center gap-1.5 rounded-md bg-accent text-white text-sm font-medium px-3 py-2 hover:bg-accent-hover transition-colors">
               <Plus size={15} strokeWidth={2} />
@@ -170,6 +178,14 @@ export default function Panels() {
             setAdding(false)
             load()
           }}
+        />
+      )}
+
+      {uploading && (
+        <UploadExcelModal
+          defaultItemType="panel"
+          onClose={() => setUploading(false)}
+          onImported={load}
         />
       )}
 

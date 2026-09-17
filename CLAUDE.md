@@ -122,7 +122,10 @@ top-level tab switch feels like a page reload.
   (migrations `0018`–`0020` — see "Access control model" above); MCS/MCP switch no longer
   unmounts/refetches (see Navigation shell); MCS dashboard stat cards are now links straight into
   Samples pre-filtered by that status (`?status=`); moved onto the single context-aware sidebar,
-  its old standalone `McspSidebar` removed. See `docs/mcsp.md`. Old project not yet decommissioned.
+  its old standalone `McspSidebar` removed. **2026-09-17**: bulk Excel import for both
+  Samples/Panels — one upload handles row data AND embedded images server-side (edge function
+  `extract-excel-data`), "Upload Excel" button next to Add Sample/Add Panel. See `docs/mcsp.md`.
+  Old project not yet decommissioned.
 - **Production, HR, Admin**: not started
 
 ## Core Management (not a department)

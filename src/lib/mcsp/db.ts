@@ -1,6 +1,7 @@
 import { supabase } from '../supabase'
 import type {
   Buyer,
+  ExcelImportResult,
   Hall,
   ItemType,
   Movement,
@@ -72,6 +73,42 @@ export async function updateHall(hallId: string, hallNumber: number, name: strin
 export async function deleteHall(hallId: string): Promise<void> {
   const { error } = await mcsp().rpc('delete_hall', { p_hall_id: hallId })
   if (error) throw error
+}
+
+/**
+ * Bulk Excel import — one upload does everything server-side (the
+ * extract-excel-data edge function): parses rows, matches columns by name,
+ * extracts embedded images by position, uploads them, and inserts the rows.
+ * Not schema-scoped like the rest of this file — functions.invoke() always
+ * calls /functions/v1/<name> regardless of supabase.schema(). Passing a
+ * FormData body lets the SDK set the multipart Content-Type itself.
+ */
+export async function uploadExcelImport(params: {
+  file: File
+  buyerId: string
+  itemType: ItemType
+}): Promise<ExcelImportResult> {
+  const formData = new FormData()
+  formData.append('file', params.file)
+  formData.append('buyer_id', params.buyerId)
+  formData.append('item_type', params.itemType)
+
+  const { data, error } = await supabase.functions.invoke('extract-excel-data', { body: formData })
+
+  if (error) {
+    let message = error.message
+    if ('context' in error && error.context instanceof Response) {
+      try {
+        const body = await error.context.json()
+        if (body?.error) message = body.error
+      } catch {
+        // fall back to the generic error message below
+      }
+    }
+    throw new Error(message)
+  }
+
+  return data as ExcelImportResult
 }
 
 // ---------------------------------------------------------------------------

@@ -221,6 +221,15 @@ export interface ValidityChange {
   created_at: string
 }
 
+/** Response shape of the extract-excel-data edge function (bulk Excel import). */
+export interface ExcelImportResult {
+  imported: number
+  skipped: number
+  skipped_codes: string[]
+  images_uploaded: number
+  errors: string[]
+}
+
 export const REASON_OPTIONS = ['Inspection', 'Production', 'Testing', 'R&D', 'Packaging', 'Other'] as const
 export const NON_HALL_DESTINATIONS = ['Supplier', 'Other'] as const
 export const PURCHASER_OPTIONS = ['Thanaram', 'Suresh Chaudhary', 'Nitin Jain', 'Other'] as const

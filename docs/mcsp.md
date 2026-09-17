@@ -206,11 +206,26 @@ use `--success`/`--warning`/`--info` tokens (no raw Tailwind palette); primary b
 manage pages use `--accent` not `bg-text`. Movement-history timeline connector no longer dangles.
 Excel export is awaited + surfaces failures. `uploadImage` falls back to a MIME-derived extension.
 
+## Bulk Excel import (built 2026-09-17)
+
+One upload handles both row data and embedded images for either Samples or Panels — the
+"Upload Excel" button next to Add Sample/Add Panel opens `UploadExcelModal`
+(`src/pages/mcsp/UploadExcelModal.tsx`), which posts a buyer + item type + `.xlsx`/`.xls` file to
+the `extract-excel-data` edge function (`supabase/functions/extract-excel-data/index.ts`) via
+`uploadExcelImport()` in `db.ts`. Server-side: parses the sheet with SheetJS, maps columns by a
+case/punctuation-insensitive alias table (e.g. "BT-Code"/"SKU" → `bt_code`, "Buyer Ref" →
+`product_ref`, "Hall No" → hall, matched by name or numeric `hall_number`), pulls embedded images
+straight out of the `.xlsx` zip (`xl/drawings/*.xml` anchors → `xl/media/*`) and matches each to
+its row by position, uploads them to `mcsp-images/[buyer]/[code].[ext]`, and inserts — skipping
+rows whose BT/panel code already exists (in-file or in the DB) rather than failing the batch.
+Returns `{ imported, skipped, skipped_codes, images_uploaded, errors }`, which the modal renders
+as a summary plus collapsible skipped-codes/error lists. Ported from and replaces the original
+app's `UploadSamplesModal` + `extractSpreadsheetImages.js`, but server-side and covering panels too
+(the original was samples-only, client-side).
+
 ## Not yet done
 
 - **Email/Web Push + validity-expiry cron alerts** — in-app notifications only (see above).
-- **Bulk Excel import + embedded-image matching** for samples (the original app's
-  `UploadSamplesModal`/`extractSpreadsheetImages` logic) — not ported.
 - **`forwardSample()`/`forwardPanel` multi-hop** — RPC + `db.ts` wrapper exist, no UI calls it yet
   (only Issue/Return are wired into the drawers).
 - **Panel comments** — `mcsp.panels` still has no comments table, so `PanelDrawer` has no Comments

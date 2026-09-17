@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, Upload } from 'lucide-react'
 import { ImageOff } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../contexts/AuthContext'
@@ -10,6 +10,7 @@ import type { SampleWithRelations } from '../../../lib/mcsp/dbTypes'
 import { StatusBadge, ValidityBadge } from '../Badges'
 import AddSampleModal from './AddSampleModal'
 import SampleDrawer from './SampleDrawer'
+import UploadExcelModal from '../UploadExcelModal'
 import { exportSamplesToExcel } from '../../../lib/mcsp/exportExcel'
 
 type FilterTab = 'all' | 'in_hall' | 'checked_out' | 'expiring_soon'
@@ -35,6 +36,7 @@ export default function Samples() {
   }
   const [search, setSearch] = useState('')
   const [adding, setAdding] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [selected, setSelected] = useState<SampleWithRelations | null>(null)
   const [exporting, setExporting] = useState(false)
 
@@ -92,6 +94,15 @@ export default function Samples() {
           >
             {exporting ? 'Exporting…' : 'Export'}
           </button>
+          {canManage && (
+            <button
+              onClick={() => setUploading(true)}
+              className="flex items-center gap-1.5 rounded-md border border-border text-text text-sm px-3 py-2 hover:bg-surface transition-colors"
+            >
+              <Upload size={15} strokeWidth={2} />
+              Upload Excel
+            </button>
+          )}
           {canManage && (
             <button
               onClick={() => setAdding(true)}
@@ -199,6 +210,14 @@ export default function Samples() {
             setAdding(false)
             load()
           }}
+        />
+      )}
+
+      {uploading && (
+        <UploadExcelModal
+          defaultItemType="sample"
+          onClose={() => setUploading(false)}
+          onImported={load}
         />
       )}
 
