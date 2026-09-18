@@ -90,10 +90,6 @@ Deno.serve(async (req: Request) => {
   const password = typeof body.password === 'string' ? body.password : ''
   const role = typeof body.role === 'string' ? body.role : ''
   const departments = Array.isArray(body.departments) ? body.departments.filter((d) => typeof d === 'string') : []
-  const hall = typeof body.hall === 'string' && body.hall.trim() ? body.hall.trim() : null
-  const buyers = Array.isArray(body.buyers)
-    ? body.buyers.filter((b) => typeof b === 'string' && b.trim())
-    : null
   const departmentAdminFor = Array.isArray(body.department_admin_for)
     ? body.department_admin_for.filter((d) => typeof d === 'string')
     : []
@@ -126,14 +122,15 @@ Deno.serve(async (req: Request) => {
     return json({ success: false, error: createError?.message ?? 'Could not create the account' }, 400)
   }
 
+  // hall/buyers are NOT core.users columns (moved to mcsp.users, which is
+  // FK-based — hall_id/buyer_ids, not plain names — and populated separately
+  // via the MCSP Users admin page, not at account-creation time).
   const { error: insertError } = await adminClient.schema('core').from('users').insert({
     id: created.user.id,
     full_name,
     email,
     role,
     departments,
-    hall: role === 'manager' ? hall : null,
-    buyers: role === 'merchant' ? buyers : null,
     department_admin_for: departmentAdminFor,
   })
 
