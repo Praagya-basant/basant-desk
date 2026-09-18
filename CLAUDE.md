@@ -128,7 +128,18 @@ top-level tab switch feels like a page reload.
   Samples pre-filtered by that status (`?status=`); moved onto the single context-aware sidebar,
   its old standalone `McspSidebar` removed. **2026-09-17**: bulk Excel import for both
   Samples/Panels — one upload handles row data AND embedded images server-side (edge function
-  `extract-excel-data`), "Upload Excel" button next to Add Sample/Add Panel. See `docs/mcsp.md`.
+  `extract-excel-data`), "Upload Excel" button next to Add Sample/Add Panel. **2026-09-18**: email
+  notifications — two edge functions, `mcsp-send-email` (Resend, fired for sample/panel
+  issue/return, shift requests, validity extensions, and expiry alerts) and `mcsp-expiry-alerts`
+  (pg_cron daily at 3:30 AM UTC / 9:00 AM IST, finds everything expiring in exactly 30 or 15 days).
+  Frontend triggers are fire-and-forget from `src/lib/mcsp/db.ts` — never block or surface errors
+  for an action that already succeeded. **⚠️ `RESEND_API_KEY` is not actually set on the deployed
+  functions yet** (a live test returned "missing RESEND_API_KEY") — no email will send until it's
+  added via Supabase Dashboard → Edge Functions → Secrets (or `supabase secrets set
+  RESEND_API_KEY=... --project-ref fwedvwhjscdrvgjsdzyk`). Recipients come from `mcsp.users`/
+  `sales.users`/`sales.email_groups` (see migration `0021`), which are currently empty — until
+  they're populated with real hall-HOD/merchant/sales-head rows, every event resolves to zero
+  recipients (by design, not an error — see the function's header comment). See `docs/mcsp.md`.
   Old project not yet decommissioned.
 - **Production, HR, Admin**: not started
 

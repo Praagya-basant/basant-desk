@@ -28,6 +28,35 @@ const SAMPLE_SELECT = '*, buyer:buyer_id(id, name), hall:hall_id(id, hall_number
 const PANEL_SELECT = '*, buyer:buyer_id(id, name), hall:hall_id(id, hall_number, name)'
 
 // ---------------------------------------------------------------------------
+// Transactional email triggers (mcsp-send-email edge function)
+// ---------------------------------------------------------------------------
+
+type EmailEvent = 'sample_issued' | 'sample_returned' | 'expiry_alert' | 'shift_request' | 'validity_extended'
+
+/**
+ * Fire-and-forget email notification for an MCSP workflow event. Never
+ * awaited by callers, never throws — a failed/misconfigured email send must
+ * not block or surface an error for an action that already succeeded.
+ * Resolves the current session's user id itself so call sites (issue/
+ * return/shift/validity) don't need to thread a caller id through.
+ */
+function triggerEmail(event: EmailEvent, itemType: ItemType, itemId: string, movementId?: string) {
+  supabase.auth
+    .getUser()
+    .then(({ data }) => {
+      const triggeredBy = data.user?.id
+      if (!triggeredBy) return
+      return supabase.functions.invoke('mcsp-send-email', {
+        body: { event, item_type: itemType, item_id: itemId, movement_id: movementId, triggered_by: triggeredBy },
+      })
+    })
+    .then((res) => {
+      if (res?.error) console.error(`Failed to send ${event} email:`, res.error.message)
+    })
+    .catch((err) => console.error(`Failed to send ${event} email:`, err))
+}
+
+// ---------------------------------------------------------------------------
 // Halls / Buyers
 // ---------------------------------------------------------------------------
 
@@ -224,6 +253,7 @@ export async function checkoutSample(params: {
     .then(({ error: notifyError }) => {
       if (notifyError) console.error('Failed to notify checkout:', notifyError.message)
     })
+  triggerEmail('sample_issued', 'sample', params.sampleId, (data as Movement).id)
   return data as Movement
 }
 
@@ -242,6 +272,7 @@ export async function returnSample(movementId: string, photoUrl?: string): Promi
     .then(({ error: notifyError }) => {
       if (notifyError) console.error('Failed to notify return:', notifyError.message)
     })
+  triggerEmail('sample_returned', 'sample', sampleId, movementId)
   return data as Movement
 }
 
@@ -513,6 +544,7 @@ export async function checkoutPanel(params: {
     p_quantity: params.quantity ?? null,
   })
   if (error) throw error
+  triggerEmail('sample_issued', 'panel', params.panelId, (data as PanelMovement).id)
   return data as PanelMovement
 }
 
@@ -522,6 +554,7 @@ export async function returnPanel(movementId: string, photoUrl?: string): Promis
   if (photoUrl) {
     await mcsp().from('panel_movements').update({ photo_url: photoUrl }).eq('id', movementId)
   }
+  triggerEmail('sample_returned', 'panel', (data as PanelMovement).panel_id, movementId)
   return data as PanelMovement
 }
 
@@ -560,6 +593,9 @@ export async function adminUpdateValidity(itemType: ItemType, itemId: string, ne
     p_reason: reason,
   })
   if (error) throw error
+  // No movement id to pass — mcsp-send-email resolves the just-inserted
+  // mcsp.validity_changes row itself (most recent for this item).
+  triggerEmail('validity_extended', itemType, itemId)
 }
 
 export async function raiseValidityRequest(params: {
@@ -622,12 +658,16 @@ export async function listValidityRequests(): Promise<ValidityRequestWithRelatio
 }
 
 export async function reviewValidityRequest(requestId: string, approve: boolean, adminNote?: string): Promise<void> {
-  const { error } = await mcsp().rpc('review_validity_request', {
+  const { data, error } = await mcsp().rpc('review_validity_request', {
     p_request_id: requestId,
     p_approve: approve,
     p_admin_note: adminNote ?? null,
   })
   if (error) throw error
+  if (approve) {
+    const req = data as { item_type: ItemType; item_id: string }
+    triggerEmail('validity_extended', req.item_type, req.item_id)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -675,6 +715,7 @@ export async function raiseShiftRequest(params: {
     .then(({ error: notifyError }) => {
       if (notifyError) console.error('Failed to notify shift request:', notifyError.message)
     })
+  triggerEmail('shift_request', params.itemType, params.itemId, requestId)
 }
 
 export async function reviewShiftRequest(requestId: string, approve: boolean, adminNote?: string): Promise<ShiftRequest> {

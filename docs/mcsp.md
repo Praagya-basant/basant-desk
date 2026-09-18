@@ -223,9 +223,46 @@ as a summary plus collapsible skipped-codes/error lists. Ported from and replace
 app's `UploadSamplesModal` + `extractSpreadsheetImages.js`, but server-side and covering panels too
 (the original was samples-only, client-side).
 
+## Email notifications (built 2026-09-18)
+
+Two edge functions, on top of the existing in-app notification bell (unrelated, still separate):
+
+- **`mcsp-send-email`** (`supabase/functions/mcsp-send-email/index.ts`) — one call sends one email
+  for one event: `sample_issued`, `sample_returned`, `expiry_alert`, `shift_request`, or
+  `validity_extended`. Takes `{ event, item_type, item_id, movement_id?, triggered_by }`, fetches
+  full item/movement/request/validity-change details server-side, resolves recipients, and sends
+  via Resend (`noreply@basant.info`) using the BASANT-branded HTML template (white card, thin
+  dividers, accent-blue "View Sample" button to `desk.basant.info/sales/mcsp`). Recipients:
+  - Hall HODs = `mcsp.users` where `hall_id = <hall>` and `mcsp_role = 'hod'`
+  - Merchants = `sales.users` where `buyer_ids` contains the item's buyer (CC'd events also CC
+    `sales.email_groups` rows named `sales_heads`)
+  - A recipient's email is their `notification_email` override if set, else their
+    `core.users.email`; `notify_on_*` flags are honoured where the relevant column exists for that
+    event (there's no `notify_on_issue`/`notify_on_return` on `sales.users`, nor
+    `notify_on_shift`/`notify_on_validity` on `mcsp.users` — those combinations aren't gated).
+  - Zero recipients is treated as a normal no-op, not an error — expected until `mcsp.users`/
+    `sales.users` are populated (see migration `0021` — both are currently empty).
+- **`mcsp-expiry-alerts`** (`supabase/functions/mcsp-expiry-alerts/index.ts`) — daily sweep via
+  pg_cron (`mcsp-expiry-alerts-daily`, migration `0022`, 3:30 AM UTC / 9:00 AM IST), finds every
+  sample and non-retired panel expiring in exactly 30 or 15 days and fires one `expiry_alert` per
+  item. Cron authenticates with the public anon key (sufficient to pass `verify_jwt`, and already
+  public — no secret in the migration file); its own DB work and its call to `mcsp-send-email` both
+  use the platform-injected `SUPABASE_SERVICE_ROLE_KEY`.
+- **Frontend triggers** — fire-and-forget calls added to `src/lib/mcsp/db.ts` right after each
+  action already succeeds (`checkoutSample`/`checkoutPanel` → `sample_issued`,
+  `returnSample`/`returnPanel` → `sample_returned`, `raiseShiftRequest` → `shift_request`,
+  `adminUpdateValidity` and `reviewValidityRequest` on approve → `validity_extended`). Never
+  awaited, never surfaced to the user — matches the existing `notify_checkout`/`notify_return`
+  in-app-notification pattern already in this file.
+- **⚠️ `RESEND_API_KEY` is not actually set on the deployed functions** — a live test call
+  returned `"Server misconfigured (missing RESEND_API_KEY)"`. No email will send until it's added
+  via Supabase Dashboard → Edge Functions → Secrets (or `supabase secrets set
+  RESEND_API_KEY=... --project-ref fwedvwhjscdrvgjsdzyk`).
+
 ## Not yet done
 
-- **Email/Web Push + validity-expiry cron alerts** — in-app notifications only (see above).
+- **Populate `mcsp.users`/`sales.users`/`sales.email_groups`** with real hall-HOD/merchant/
+  sales-head rows — until then, email notifications resolve to zero recipients for every event.
 - **`forwardSample()`/`forwardPanel` multi-hop** — RPC + `db.ts` wrapper exist, no UI calls it yet
   (only Issue/Return are wired into the drawers).
 - **Panel comments** — `mcsp.panels` still has no comments table, so `PanelDrawer` has no Comments
