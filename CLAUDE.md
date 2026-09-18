@@ -28,7 +28,10 @@ One Supabase project. Every department gets its own Postgres schema (not a new p
 
 Current schemas: `core` (shared users/roles/departments, built), `purchase` (in progress),
 `core_management` (built), `yaamya` (in progress — `wood_measurements` table),
-`mcsp` (built — MCS + MCP both live, under the **Sales** department; see `docs/mcsp.md`).
+`mcsp` (built — MCS + MCP both live, under the **Sales** department; see `docs/mcsp.md`),
+`sales` (schema exists, tables live — **not wired up, no RLS policies, no
+authenticated/anon grants, not in Exposed schemas** — scaffolding for a future
+notifications feature; see migration `0021` and the gotcha below).
 
 ## core.users format
 ```
@@ -36,7 +39,8 @@ id, full_name, email,
 role ('admin' | 'manager' | 'merchant' | 'custom'),
 departments (text[]),
 department_admin_for (text[]),
-hall, buyers, created_at
+hall, buyers, created_at,
+number, designation, is_active, is_placeholder   -- added untracked, backfilled into migrations as 0021
 ```
 
 ## Access control model — applies to every module, every department
@@ -145,3 +149,5 @@ minimal staff surface at `/my-tasks`. Full detail: `docs/core-management.md`.
 - Exposing a new Postgres schema in the Supabase dashboard ("Exposed schemas") sets the PostgREST config but does **not** always run the `GRANT USAGE`/table grants — `mcsp` sat 403ing every request for days because of this (migration `0014`). After adding a schema, verify `has_schema_privilege('authenticated','<schema>','USAGE')` is true and that `information_schema.role_table_grants` has rows for it.
 - **⚠️ Migration `0020` (`supabase/migrations/0020_access_control_narrow_has_department_permission.sql`) may not be applied yet — check before trusting MCSP row-scoping.** `0019` accidentally made `core.has_department_permission(dept)` return true for anyone with a plain department-membership baseline, not just an explicit grant — which let every Sales manager/merchant bypass `mcsp.is_hall_manager_of` / `mcsp.owns_buyer` and see every hall's/buyer's samples. `0020` fixes it. Verify with a live user before assuming this is safe: a hall manager should see only their hall's samples, a merchant only their buyers'.
 - MCSP's Postgres schema is still named `mcsp`, but it lives under the **Sales** department now (not its own department) — every RLS policy/RPC checks `'sales'`, not `'mcsp'`. Don't assume the schema name tells you the department key for anything built after 2026-09-05.
+- **⚠️ `mcsp.user_full_view` and `mcsp.buyer_full_view` leak PII to the public `anon` key right now.** Both views are owned by `postgres` (not `security_invoker`), so they read `core.users`/`sales.users`/`mcsp.users` with the owner's RLS bypass — and `anon` already has `SELECT` on both. That means anyone with the publishable/anon key can read every user's email/phone/designation/department/WhatsApp number with no login, via plain PostgREST `GET /mcsp/user_full_view`. Known, not yet fixed — recommend `revoke select on mcsp.user_full_view, mcsp.buyer_full_view from anon;` as a follow-up (confirm nothing already depends on anon access first — nothing in this repo currently does).
+- **Schema drift happens outside this repo.** The `sales` schema, `mcsp.users` table, `mcsp.buyers.buyer_code`/`mcsp.halls.hod_user_id` columns, `core.users.number`/`designation`/`is_active`/`is_placeholder` columns, and both `mcsp.*_full_view` views were all built directly against Supabase, never through a tracked migration — discovered and backfilled into `supabase/migrations/0021_capture_sales_schema_and_untracked_drift.sql` on 2026-09-18. If a query references a column/table that isn't in this repo's migrations, check the live DB before assuming it doesn't exist — `supabase/migrations` is not guaranteed to be the full picture.
